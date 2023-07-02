@@ -1,0 +1,13 @@
+<settings>
+    <setting propertyKey="@Properties.stops" title="@Strings.StopsTitle" maxLength="16">
+        <setting title="@Strings.StopDisplayNameTitle" type="string">
+            <settingConfig id="displayName" type="alphanumeric" maxLength="32" errorMessage="@Strings.StopDisplayNameError" />
+        </setting>
+        <setting title="@Strings.StopIdTitle" type="number">
+            <settingConfig id="stopId" required="true" type="numeric" min="1000" max="99999" errorMessage="@Strings.StopIdRangeError" />
+        </setting>
+    </setting>
+    <setting propertyKey="@Properties.customUrl" title="@Strings.CustomUrlTitle">
+        <settingConfig type="url" />
+    </setting>
+</settings>

@@ -1,0 +1,5 @@
+project.manifest = manifest_beta.xml
+
+base.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay
+
+descentg1.excludeAnnotations = roundScreen; colourDisplay

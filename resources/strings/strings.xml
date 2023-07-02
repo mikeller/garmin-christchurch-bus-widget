@@ -1,0 +1,14 @@
+<strings>
+    <string id="AppName" scope="glance">Christchurch Bus Departure Times</string>
+    <string id="AppNameBeta" scope="glance">Christchurch Bus Departure Times (Beta)</string>
+
+    <string id="StopsTitle">Bus Stops</string>
+    <string id="StopDisplayNameTitle">Display name</string>
+    <string id="StopDisplayNameError">Maximum 32 characters</string>
+    <string id="StopIdTitle">Bus Stop Id</string>
+    <string id="StopIdRangeError">Bus Stop Id must be between 1000 and 99999</string>
+    <string id="CustomUrlTitle">Custom Server URL</string>
+
+    <string id="NoStops" scope="glance">No stops!</string>
+    <string id="NoBuses" scope="glance">No more buses!</string>
+</strings>

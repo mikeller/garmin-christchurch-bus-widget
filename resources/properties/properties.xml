@@ -1,0 +1,4 @@
+<properties>
+    <property id="stops" type="array"></property>
+    <property id="customUrl" type="string"></property>
+</properties>
