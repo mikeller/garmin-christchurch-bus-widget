@@ -75,8 +75,38 @@ class ChristchurchBusView extends BaseChristchurchBusView {
                 index++;
             }
         } else {
+            var errorMessage = "";
+            var errorCondition = data["ErrorCondition"] as Dictionary<String, String or Dictionary>?;
+            if (errorCondition != null) {
+                errorMessage = Constants.UNKNOWN_ERROR_STRING;
+                var errorKeys = errorCondition.keys();
+                var error = null;
+                for (var i = 0; i < errorKeys.size(); i++) {
+                    if (!"Description".equals(errorKeys[i])) {
+                        error = errorKeys[i];
+
+                        break;
+                    }
+                }
+                if (error != null) {
+                    var errorText = (errorCondition[error] as Dictionary<String, String>)["ErrorText"];
+                    if ("OtherError".equals(error) && "No trips on stop.".equals(errorText)) {
+                        errorMessage = Constants.NO_BUSES_STRING;
+                    } else {
+                        errorMessage = error + ": " + errorText;
+                    }
+                } else {
+                    var errorDescription = errorCondition["Description"] as String;
+                    if (errorDescription != null) {
+                        errorMessage = errorDescription;
+                    }
+                }
+            } else {
+                errorMessage = Constants.NO_BUSES_STRING;
+            }
+
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
-            dc.drawText(columnsX[0], cursorY, Graphics.FONT_SYSTEM_TINY, Constants.NO_BUSES_STRING, Graphics.TEXT_JUSTIFY_LEFT);
+            dc.drawText(columnsX[0], cursorY, Graphics.FONT_SYSTEM_TINY, errorMessage, Graphics.TEXT_JUSTIFY_LEFT);
         }
     }
 
