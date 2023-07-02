@@ -42,4 +42,6 @@ class Constants {
 
     static const NO_STOPS_STRING as String = WatchUi.loadResource(Rez.Strings.NoStops) as String;
     static const NO_BUSES_STRING as String = WatchUi.loadResource(Rez.Strings.NoBuses) as String;
+
+    static const UNKNOWN_ERROR_STRING as String = WatchUi.loadResource(Rez.Strings.UnknownError) as String;
 }
