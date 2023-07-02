@@ -1,8 +1,8 @@
-# Divesite Weather Widget for Garmin Smart Watches
+# Christchurch Bus Departure Widget for Garmin Smart Watches
 
-Show the weather conditions at your favourite divesite as a widget on your Garmin smart watch.
-The data is sourced from [the YR weather service](https://www.yr.no/en).
+Show the time until the next buses depart from a preconfigured list of bus stops in Christchurch / New Zealand.
+The data is provided by [metro](https://www.metroinfo.co.nz/).
 
 ## First Prototype
 
-![The prototype](docs/prototype.jpg)
+![The first prototype at work](docs/prototype.jpg)
