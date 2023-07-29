@@ -118,6 +118,8 @@ class ChristchurchBusViewManager {
     function onDelayedRefresh() as Void {
         Utils.log("Delayed refresh running.");
 
+        delayedRefreshRequested = false;
+
         refreshBusStopCache(currentStopIndex);
     }
 }
