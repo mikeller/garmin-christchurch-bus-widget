@@ -34,10 +34,10 @@ class ChristchurchBusViewManager {
         started = true;
     }
 
-    function getInitialView() as Array<Views or InputDelegates>? {
+    function getInitialView() as [ Views ] or [ Views, InputDelegates ] {
         Utils.log("Initial view loaded.");
 
-        return [ currentView, behaviourDelegate ] as Array<Views or InputDelegates>;
+        return [ currentView, behaviourDelegate ] as [ Views, InputDelegates ];
     }
 
     private function switchView () as Void {

@@ -124,7 +124,7 @@ class ChristchurchBusView extends BaseChristchurchBusView {
             angle += Math.PI;
         }
         var normalisedX = Math.cos(angle);
-        return Math.round(circleOriginX - (normalisedX * circleOriginX));
+        return Math.round(circleOriginX - (normalisedX * circleOriginX)) as Number;
     }
 
     (:semioctagonalScreen)
