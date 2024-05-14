@@ -43,7 +43,7 @@ class ChristchurchBusAppProperties {
     }
 
     static function getCustomUrl() as String? {
-        var customUrl = Properties.getValue("customUrl");
+        var customUrl = Properties.getValue("customUrl") as String;
         if ("".equals(customUrl)) {
             customUrl = null;
         }

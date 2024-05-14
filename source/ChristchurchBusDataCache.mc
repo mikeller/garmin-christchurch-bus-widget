@@ -9,22 +9,17 @@ class ChristchurchBusDataCache {
     static function tryGetCachedData(stopId as Number, ignoreExpiry as Boolean) as Dictionary<String, String or Array>? {
         var data = Storage.getValue(stopId) as Dictionary<String, String or Array>?;
         if (data != null) {
-            try {
-                var expiresString = data["ValidUntil"] as String?;
-                var expires = Utils.parseIsoDate(expiresString);
-                var isStale = expires == null || (expires as Moment).lessThan(Time.now());
-                if (!isStale || ignoreExpiry) {
-                    Utils.log("Cache hit (" + (isStale ? "stale, " : "") + "expiry: " + expiresString + "): " + stopId);
+            var expiresString = data["ValidUntil"] as String?;
+            var expires = Utils.parseIsoDate(expiresString);
+            var isStale = expires == null || (expires as Moment).lessThan(Time.now());
+            if (!isStale || ignoreExpiry) {
+                Utils.log("Cache hit (" + (isStale ? "stale, " : "") + "expiry: " + expiresString + "): " + stopId);
 
-                    return data;
-                } else {
-                    Utils.log("Cache miss (stale data found, expiry: " + expiresString + "): " + stopId);
+                return data;
+            } else {
+                Utils.log("Cache miss (stale data found, expiry: " + expiresString + "): " + stopId);
 
-                    return null;
-                }
-            } catch (exception instanceof UnexpectedTypeException) {
-                Utils.log("Cache data format problem: (exception: " + exception.getErrorMessage() + "): " + stopId);
-                exception.printStackTrace();
+                return null;
             }
         }
 

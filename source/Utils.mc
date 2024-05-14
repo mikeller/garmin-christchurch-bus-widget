@@ -17,12 +17,12 @@ class Utils {
         }
 
         var moment = Gregorian.moment({
-            :year => (date.substring( 0, 4) as String).toNumber(),
-            :month => (date.substring( 5, 7) as String).toNumber(),
-            :day => (date.substring( 8, 10) as String).toNumber(),
-            :hour => (date.substring(11, 13) as String).toNumber(),
-            :minute => (date.substring(14, 16) as String).toNumber(),
-            :second => (date.substring(17, 19) as String).toNumber()
+            :year => (date.substring(0, 4) as String).toNumber() as Number,
+            :month => (date.substring(5, 7) as String).toNumber() as Number,
+            :day => (date.substring(8, 10) as String).toNumber() as Number,
+            :hour => (date.substring(11, 13) as String).toNumber() as Number,
+            :minute => (date.substring(14, 16) as String).toNumber() as Number,
+            :second => (date.substring(17, 19) as String).toNumber() as Number,
         });
         var suffix = date.substring(19, date.length()) as String;
 

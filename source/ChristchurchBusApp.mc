@@ -16,12 +16,12 @@ class ChristchurchBusApp extends Application.AppBase {
         }
     }
 
-    function getGlanceView() as Array<GlanceView>? {
-        return [new ChristchurchBusGlanceView(stops.size() > 0 ? stops[0] : null)] as Array<GlanceView>;
+    function getGlanceView() as [ GlanceView ] or [ GlanceView, GlanceViewDelegate ] or Null {
+        return [new ChristchurchBusGlanceView(stops.size() > 0 ? stops[0] : null)] as [GlanceView];
     }
 
     (:typecheck(disableGlanceCheck))
-    function getInitialView() as Array<Views or InputDelegates>? {
+    function getInitialView() as [ Views ] or [ Views, InputDelegates ] {
         if (viewManager == null) {
             viewManager = new ChristchurchBusViewManager(stops);
         }
