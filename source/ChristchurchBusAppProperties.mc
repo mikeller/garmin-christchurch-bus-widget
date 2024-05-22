@@ -5,41 +5,75 @@ import Toybox.Application.Properties;
 
 (:glance)
 class ChristchurchBusAppProperties {
-    static function getStopsProperty() as Array<Dictionary>? {
-        var stops = Properties.getValue("stops") as Array<Dictionary>?;
+    private static var stops as Array<Dictionary>?;
 
-        if (stops != null) {
-            var needsUpdate = false;
-            var i = 0;
-            while (i < stops.size()) {
-                var stop = stops[i];
-                var stopId = stop["stopId"] as Number;
+    static function loadStops() as Array<Dictionary> {
+        if (stops == null) {
+            stops = Properties.getValue("stops") as Array<Dictionary>?;           
+        }
 
-                var j;
-                for (j = 0; j < i; j++) {
-                    var firstStopId = stops[j]["stopId"] as Number;
+        return stops != null ? stops : [];
+    }
 
-                    if (stopId == firstStopId) {
-                        stops.remove(stop);
-                        needsUpdate = true;
+    static function saveStops(localStops as Array<Dictionary>, needsUpdate as Boolean) as Void {
+        if (needsUpdate) {
+            stops = localStops;
+            Properties.setValue("stops", stops as Array<PropertyValueType>);
+        }
+    }
 
-                        Utils.log("Duplicate location removed: " + stop.toString());
+    static function getStopsProperty() as Array<Dictionary>? {    
+        var localStops = loadStops();
+        var needsUpdate = false;
+        var i = 0;
+        while (i < localStops.size()) {
+            var stop = localStops[i];
+            var stopId = stop["stopId"] as Number;
 
-                        break;
-                    }
-                }
+            var j;
+            for (j = 0; j < i; j++) {
+                var firstStopId = localStops[j]["stopId"] as Number;
 
-                if (j == i) {
-                    i++;
+                if (stopId == firstStopId) {
+                    localStops.remove(stop);
+                    needsUpdate = true;
+
+                    Utils.log("Duplicate location removed: " + stop.toString());
+
+                    break;
                 }
             }
 
-            if (needsUpdate) {
-                Properties.setValue("stops", stops as Array<PropertyValueType>);
+            if (j == i) {
+                i++;
             }
         }
 
-        return stops;
+        saveStops(localStops, needsUpdate);
+ 
+        return localStops;
+    }
+
+    static function setStopNameIfEmpty(stopId as Number, stopName as String) as Void {
+        var localStops = loadStops();
+
+        var needsUpdate = false;
+        var i = 0;
+        while (i < localStops.size()) {
+            var stop = localStops[i];
+            var currentStopId = stop["stopId"] as Number;
+            var currentStopName = stop["displayName"] as String;
+
+            if (currentStopId == stopId && "".equals(currentStopName)) {
+                stop["displayName"] = stopName;
+                localStops[i] = stop;
+                needsUpdate = true;
+            }
+
+            i++;
+        }
+
+        saveStops(localStops, needsUpdate);      
     }
 
     static function getCustomUrl() as String? {

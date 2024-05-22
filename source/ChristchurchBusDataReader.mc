@@ -103,6 +103,14 @@ class ChristchurchBusDataReader {
 
                 ChristchurchBusDataCache.setCachedData(stopId, delivery);
 
+                var visits = delivery["MonitoredStopVisit"] as Array<Dictionary>?;
+                if (visits != null) {
+                    var visit = visits[0];
+                    var journey = visit["MonitoredVehicleJourney"] as Dictionary<String, String or Number or Boolean or Dictionary>;
+                    var stopName = (journey["MonitoredCall"] as Dictionary<String, String or Boolean or Dictionary>)["StopPointName"] as String;
+                    ChristchurchBusAppProperties.setStopNameIfEmpty(stopId, stopName);
+                }
+
                 connectionProblem = false;
 
                 Utils.log("Received data for handle: " + handle + ", " + stopId);
