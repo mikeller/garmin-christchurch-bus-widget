@@ -9,7 +9,7 @@ class ChristchurchBusAppProperties {
 
     static function loadStops() as Array<Dictionary> {
         if (stops == null) {
-            stops = Properties.getValue("stops") as Array<Dictionary>?;           
+            stops = Properties.getValue("stops") as Array<Dictionary>?;
         }
 
         return stops != null ? stops : [];
@@ -22,7 +22,7 @@ class ChristchurchBusAppProperties {
         }
     }
 
-    static function getStopsProperty() as Array<Dictionary>? {    
+    static function getStopsProperty() as Array<Dictionary>? {
         var localStops = loadStops();
         var needsUpdate = false;
         var i = 0;
@@ -50,7 +50,7 @@ class ChristchurchBusAppProperties {
         }
 
         saveStops(localStops, needsUpdate);
- 
+
         return localStops;
     }
 
@@ -73,7 +73,7 @@ class ChristchurchBusAppProperties {
             i++;
         }
 
-        saveStops(localStops, needsUpdate);      
+        saveStops(localStops, needsUpdate);
     }
 
     static function getCustomUrl() as String? {
