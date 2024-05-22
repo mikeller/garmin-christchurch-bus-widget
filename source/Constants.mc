@@ -6,6 +6,8 @@ import Toybox.WatchUi;
 class Constants {
     static const REFRESH_DELAY_S = 10;
 
+    static const MAX_CONCURRENT_REQUESTS = 3;
+
     (:roundScreen)
     static const LINES_TO_SHOW = 5;
     (:semioctagonalScreen)
