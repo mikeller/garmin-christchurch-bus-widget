@@ -17,10 +17,13 @@ class ChristchurchBusViewManager {
 
     private var started as Boolean = false;
 
+    private var retryTimer as Timer.Timer = new Timer.Timer();
+    private var retryIndex as Number = -1;
+
     private var refreshTimer as Timer.Timer = new Timer.Timer();
     private var delayedRefreshRequested as Boolean = false;
 
-    function initialize(stops as Array<Dictionary>) {
+    function initialize(stops as Array<Dictionary>?) {
         if (stops != null) {
             self.stops = stops;
         }
@@ -81,8 +84,17 @@ class ChristchurchBusViewManager {
             var stop = getStop(index);
             var stopId = stop["stopId"] as Number;
 
-            reader.getBusData(stopId, index, method(:onBusDataReady));
+            if (!reader.getBusData(stopId, index, method(:onBusDataReady)) && retryIndex == -1) {
+                retryIndex = index;
+                retryTimer.start(method(:onRetryRequest), 1000, false);
+            }
         }
+    }
+
+    function onRetryRequest() as Void {
+        var index = retryIndex;
+        retryIndex = -1;
+        refreshBusStopCache(index);
     }
 
     private function getStop(index as Number) as Dictionary<String, Number or String or Boolean> {
