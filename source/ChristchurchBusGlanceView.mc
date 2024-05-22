@@ -50,8 +50,9 @@ class ChristchurchBusGlanceView extends WatchUi.GlanceView {
         dc.drawText(0, 0, Graphics.FONT_SYSTEM_TINY, glanceTitle, Graphics.TEXT_JUSTIFY_LEFT);
 
         var lineHeight = dc.getFontHeight(Graphics.FONT_SYSTEM_TINY);
-        var secondLineY = lineHeight + Constants.VERTICAL_SPACE;
 
         //TODO: draw glance content
+        //var secondLineY = lineHeight + Constants.VERTICAL_SPACE;
+
     }
 }

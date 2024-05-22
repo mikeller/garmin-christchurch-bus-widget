@@ -6,16 +6,16 @@ import Toybox.Time;
 import Toybox.Time.Gregorian;
 
 class ChristchurchBusView extends BaseChristchurchBusView {
-    private var dateFont as Graphics.FontDefinition = Graphics.FONT_SYSTEM_TINY;
+    //private var dateFont as Graphics.FontDefinition = Graphics.FONT_SYSTEM_TINY;
 
     var data as Dictionary<String, String or Array> = {} as Dictionary<String, String or Array>;
-    private var displayName as String = "";
+    //private var displayName as String = "";
         
     function initialize(data as Dictionary<String, String or Array>, displayName as String, dataIsStale as Boolean) {
         BaseChristchurchBusView.initialize(displayName, dataIsStale);
 
         self.data = data;
-        self.displayName = displayName;
+        //self.displayName = displayName;
     }
 
     function onUpdate(dc as Dc) as Void {
@@ -25,9 +25,9 @@ class ChristchurchBusView extends BaseChristchurchBusView {
         var screenHeight = dc.getHeight();
 
         var lineHeight = dc.getFontHeight(Graphics.FONT_SYSTEM_TINY);
-        if (dc.getFontHeight(Graphics.FONT_SYSTEM_XTINY) == lineHeight) {
-            dateFont = Graphics.FONT_SYSTEM_XTINY;
-        }
+        // if (dc.getFontHeight(Graphics.FONT_SYSTEM_XTINY) == lineHeight) {
+        //     dateFont = Graphics.FONT_SYSTEM_XTINY;
+        // }
 
         var nameColumnX = calculateViewPortBoundaryX(cursorY, lineHeight, screenWidth, screenHeight, false);
         var nameColumnXBottom = calculateViewPortBoundaryX(cursorY + (Constants.LINES_TO_SHOW - 1) * (lineHeight + Constants.VERTICAL_SPACE), lineHeight, screenWidth, screenHeight, false);
@@ -96,7 +96,7 @@ class ChristchurchBusView extends BaseChristchurchBusView {
                         errorMessage = error + ": " + errorText;
                     }
                 } else {
-                    var errorDescription = errorCondition["Description"] as String;
+                    var errorDescription = errorCondition["Description"] as String?;
                     if (errorDescription != null) {
                         errorMessage = errorDescription;
                     }
@@ -124,7 +124,7 @@ class ChristchurchBusView extends BaseChristchurchBusView {
             angle += Math.PI;
         }
         var normalisedX = Math.cos(angle);
-        return Math.round(circleOriginX - (normalisedX * circleOriginX)) as Number;
+        return Math.round(circleOriginX - (normalisedX * circleOriginX)).toNumber();
     }
 
     (:semioctagonalScreen)
