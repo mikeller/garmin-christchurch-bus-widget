@@ -6,7 +6,7 @@ import Toybox.Application.Properties;
 (:glance)
 class ChristchurchBusAppProperties {
     static function getStopsProperty() as Array<Dictionary>? {
-        var stops = Properties.getValue("stops") as Array<Dictionary>;
+        var stops = Properties.getValue("stops") as Array<Dictionary>?;
 
         if (stops != null) {
             var needsUpdate = false;
