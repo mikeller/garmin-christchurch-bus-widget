@@ -1,5 +1,11 @@
-project.manifest = manifest_beta.xml
+project.manifest = manifest.xml
 
 base.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay
-
 descentg1.excludeAnnotations = roundScreen; colourDisplay
+instinct2.excludeAnnotations = roundScreen; colourDisplay
+instinct2s.excludeAnnotations = roundScreen; colourDisplay
+instinct2x.excludeAnnotations = roundScreen; colourDisplay
+
+descentmk351mm.resourcePath = $(descentmk351mm.resourcePath); resources-launcher-60x60
+descentmk343mm.resourcePath = $(descentmk343mm.resourcePath); resources-launcher-60x60
+epix2.resourcePath = $(epix2.resourcePath); resources-launcher-60x60
