@@ -32,6 +32,6 @@ class ChristchurchBusDataCache {
         var expiresString = data["ValidUntil"] as String?;
         Utils.log("Cache update (expiry: " + expiresString + "): " + stopId);
 
-        Storage.setValue(stopId, data as Dictionary<String, PropertyValueType>);
+        Storage.setValue(stopId, data as Dictionary<PropertyKeyType, PropertyValueType>);
     }
 }

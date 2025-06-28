@@ -60,3 +60,4 @@ dkms.conf
 /resources/strings/secrets.xml
 
 *.swp
+.DS_Store
