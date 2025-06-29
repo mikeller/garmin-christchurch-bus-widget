@@ -7,7 +7,10 @@
             <settingConfig id="stopId" required="true" type="numeric" min="1000" max="99999" errorMessage="@Strings.StopIdRangeError" />
         </setting>
     </setting>
+    <setting propertyKey="@Properties.stopResetTimeMin" title="@Strings.StopResetTimeMinTitle">
+        <settingConfig required="true" type="numeric" min="-1" max="1440" errorMessage="@Strings.StopResetTimeMinRangeError" />
+    </setting>
     <setting propertyKey="@Properties.customUrl" title="@Strings.CustomUrlTitle">
-        <settingConfig type="url" />
+        <settingConfig type="url"/>
     </setting>
 </settings>
