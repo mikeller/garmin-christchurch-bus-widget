@@ -32,38 +32,7 @@ class ChristchurchBusDataCache {
         var expiresString = data["ValidUntil"] as String?;
         Utils.log("Cache update (expiry: " + expiresString + "): " + stopId);
 
-        var compressedData = {
-            "ValidUntil" => expiresString
-        };
-
-        var visits = data["MonitoredStopVisit"] as Array<Dictionary>?;
-        if (visits != null) {
-            var index = 0;
-            var compressedVisits = [];
-            while (index < visits.size()) {
-                var visit = visits[index];
-                var journey = visit["MonitoredVehicleJourney"] as Dictionary<String, String or Number or Boolean or Dictionary>;
-                var call = (journey["MonitoredCall"] as Dictionary<String, String or Number or Boolean or Dictionary>);
-                var expectedDepartureTimeString = call["ExpectedDepartureTime"] as String;
-
-                var compressedVisit = {
-                    "ExpectedDepartureTime" => expectedDepartureTimeString,
-                    "VehicleAtStop" => call["VehicleAtStop"],
-                    "PublishedLineName" => journey["PublishedLineName"],
-                    "DestinationName" => journey["DestinationName"],
-                };
-
-                compressedVisits.add(compressedVisit);
-
-                index++;
-            }
-
-            compressedData["MonitoredStopVisit"] = compressedVisits;
-        }
-
-        compressedData["ErrorCondition"] = data["ErrorCondition"];
-
-        Storage.setValue(stopId, compressedData as Dictionary<PropertyKeyType, PropertyValueType>);
+        Storage.setValue(stopId, data as Dictionary<PropertyKeyType, PropertyValueType>);
     }
 
     static function setLastStop(stopIndex as Number) as Void {

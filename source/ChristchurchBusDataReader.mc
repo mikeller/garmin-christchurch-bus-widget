@@ -117,6 +117,42 @@ class ChristchurchBusDataReader {
         }
     }
 
+    function compressData(data as Dictionary<String, String or Array>) as Dictionary<String, String or Array> {
+        var compressedData = {
+            "ValidUntil" => data["ValidUntil"],
+            "ErrorCondition" => data["ErrorCondition"],
+        } as Dictionary<String, String or Array>;
+
+        var visits = data["MonitoredStopVisit"] as Array<Dictionary>?;
+        if (visits != null) {
+            var index = 0;
+            var compressedVisits = [];
+            while (index < visits.size()) {
+                var visit = visits[index];
+                var journey = visit["MonitoredVehicleJourney"] as Dictionary<String, String or Number or Boolean or Dictionary>;
+                var call = (journey["MonitoredCall"] as Dictionary<String, String or Number or Boolean or Dictionary>);
+                var expectedDepartureTimeString = call["ExpectedDepartureTime"] as String;
+
+                var compressedVisit = {
+                    "ExpectedDepartureTime" => expectedDepartureTimeString,
+                    "VehicleAtStop" => call["VehicleAtStop"],
+                    "PublishedLineName" => journey["PublishedLineName"],
+                    "DestinationName" => journey["DestinationName"],
+                };
+
+                compressedVisits.add(compressedVisit);
+
+                index++;
+            }
+
+            compressedData["MonitoredStopVisit"] = compressedVisits;
+        }
+
+        compressedData["ErrorCondition"] = data["ErrorCondition"];
+
+        return compressedData;
+    }
+
     function onReceiveData(responseCode as Number, data as Dictionary?, context as Dictionary<String, String or Method or Number or Boolean>) as Void {
         var callback = context["callback"] as Method(data as Dictionary<String, String or Array>?, handle as Number, requestIsCompleted as Boolean, dataIsStale as Boolean) as Void;
         var handle = context["handle"] as Number;
@@ -131,15 +167,17 @@ class ChristchurchBusDataReader {
                     delivery = deliveries[0] as Dictionary<String, String or Array>;
 
                     persistStopName(stopId, delivery);
-                } 
+                }
 
-                ChristchurchBusDataCache.setCachedData(stopId, delivery);
+                var compressedData = compressData(delivery);
+
+                ChristchurchBusDataCache.setCachedData(stopId, compressedData);
 
                 connectionProblem = false;
 
                 Utils.log("Received data for handle: " + handle + ", " + stopId);
 
-                callback.invoke(delivery, handle, true, false);
+                callback.invoke(compressedData, handle, true, false);
 
                 done = true;
             } catch (exception instanceof UnexpectedTypeException) {
