@@ -67,35 +67,50 @@ class ChristchurchBusDataCache {
     }
 
     static function setLastStop(stopIndex as Number) as Void {
-        var stopResetTimeMin = ChristchurchBusAppProperties.getStopResetTimeMin();
-        if (stopResetTimeMin > 0 && stopIndex != 0) {
-            var resetTime = Time.now().add(new Time.Duration(stopResetTimeMin * 60));
-            var lastStopValue = {
-                :stopIndex => stopIndex,
-                :resetTime => resetTime.value()
-            };
-            Storage.setValue(Constants.LAST_STOP_INDEX_NAME, lastStopValue as PropertyValueType);
+        if (stopIndex != 0) {
+            var stopResetTimeMin = ChristchurchBusAppProperties.getStopResetTimeMin();
+            if (stopResetTimeMin > 0) {
+                var resetTime = Time.now().add(new Time.Duration(stopResetTimeMin * 60));
+                var lastStopValue = {
+                    "stopIndex" => stopIndex,
+                    "resetTime" => resetTime.value(),
+                };
+                Storage.setValue(Constants.LAST_STOP_INDEX_NAME, lastStopValue as PropertyValueType);
 
-            Utils.log("Updating last stop index: " + stopIndex + ", expires " + Utils.dateToIsoString(resetTime));
-        } else {
-            Storage.deleteValue(Constants.LAST_STOP_INDEX_NAME);
+                Utils.log("Updating last stop index: " + stopIndex + ", expires " + Utils.dateToIsoString(resetTime));
 
-            Utils.log("Reset last stop index.");
+                return;
+            } else if (stopResetTimeMin == -1) {
+                var lastStopValue = {
+                    "stopIndex" => stopIndex,
+                };
+                Storage.setValue(Constants.LAST_STOP_INDEX_NAME, lastStopValue as PropertyValueType);
 
+                Utils.log("Updating last stop index: " + stopIndex + ", never expires");
+
+                return;
+            }
         }
+
+        Storage.deleteValue(Constants.LAST_STOP_INDEX_NAME);
+
+        Utils.log("Reset last stop index.");
     }
 
     static function getLastStop() as Number {
-        var lastStopValue = Storage.getValue(Constants.LAST_STOP_INDEX_NAME) as Dictionary<Symbol, Number>?;
+        var lastStopValue = Storage.getValue(Constants.LAST_STOP_INDEX_NAME) as Dictionary<String, Number>?;
         if (lastStopValue != null) {
-            var resetTimeValue = lastStopValue[:resetTime] as Number;
+            var resetTimeValue = lastStopValue["resetTime"] as Number?;
             var resetTime = null;
-            if (resetTimeValue != -1) {
+            if (resetTimeValue != null) {
                 resetTime = new Time.Moment(resetTimeValue);
             }
 
             if (resetTime == null || !resetTime.lessThan(Time.now())) {
-                var stopIndex = lastStopValue[:stopIndex] as Number;
+                var stopIndex = lastStopValue["stopIndex"] as Number?;
+                if (stopIndex == null) {
+                    stopIndex = 0;
+                }
 
                 Utils.log("Got last stop index: " + stopIndex + ", expires " + (resetTime == null ? "never" : Utils.dateToIsoString(resetTime)));
 
