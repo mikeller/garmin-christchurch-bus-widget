@@ -7,8 +7,8 @@
     <string id="StopDisplayNameError">Maximum 32 characters.</string>
     <string id="StopIdTitle">Bus Stop Id</string>
     <string id="StopIdRangeError">Bus Stop Id must be between 1000 and 99999.</string>
-    <string id="StopResetTimeMinTitle">Time to remember the last stop [minutes], -1 for 'forever'</string>
-    <string id="StopResetTimeMinRangeError">Time must be between 0 and 1440 minutes or -1 for 'forever'.</string>
+    <string id="StopResetTimeMinTitle">Time to remember the last stop [minutes], -1 for 'until changed'</string>
+    <string id="StopResetTimeMinRangeError">Time must be between 0 and 1440 minutes, or -1 for 'until changed'.</string>
     <string id="CustomUrlTitle">Custom Server URL</string>
 
     <string id="NoStops" scope="glance">No stops!</string>
