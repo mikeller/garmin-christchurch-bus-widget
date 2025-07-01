@@ -17,7 +17,11 @@ class ChristchurchBusApp extends Application.AppBase {
     }
 
     function getGlanceView() as [ GlanceView ] or [ GlanceView, GlanceViewDelegate ] or Null {
-        return [new ChristchurchBusGlanceView(stops.size() > 0 ? stops[0] : null)] as [GlanceView];
+        var stopIndex = ChristchurchBusDataCache.getLastStop();
+        if (stopIndex < 0 || stopIndex >= stops.size()) {
+            stopIndex = 0;
+        }
+        return [new ChristchurchBusGlanceView(stops.size() > 0 ? stops[stopIndex] : null)] as [GlanceView];
     }
 
     (:typecheck(disableGlanceCheck))

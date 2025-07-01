@@ -28,6 +28,11 @@ class ChristchurchBusViewManager {
             self.stops = stops;
         }
 
+        var lastStopIndex = ChristchurchBusDataCache.getLastStop();
+        if (lastStopIndex >= 0 && lastStopIndex < self.stops.size()) {
+            currentStopIndex = lastStopIndex;
+        }
+
         reader = new ChristchurchBusDataReader();
         behaviourDelegate = new ChristchurchBusBehaviorDelegate(method(:displayBusesForCurrentStop), method(:nextStop));
         currentView = new BaseChristchurchBusView(currentPageTitle, false);
@@ -52,6 +57,8 @@ class ChristchurchBusViewManager {
         if (currentStopIndex >= stops.size()) {
             currentStopIndex = 0;
         }
+
+        ChristchurchBusDataCache.setLastStop(currentStopIndex);
     }
 
     function displayBusesForCurrentStop() as Void {

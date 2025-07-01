@@ -6,16 +6,12 @@ import Toybox.Time;
 import Toybox.Time.Gregorian;
 
 class ChristchurchBusView extends BaseChristchurchBusView {
-    //private var dateFont as Graphics.FontDefinition = Graphics.FONT_SYSTEM_TINY;
-
     var data as Dictionary<String, String or Array> = {} as Dictionary<String, String or Array>;
-    //private var displayName as String = "";
         
     function initialize(data as Dictionary<String, String or Array>, displayName as String, dataIsStale as Boolean) {
         BaseChristchurchBusView.initialize(displayName, dataIsStale);
 
         self.data = data;
-        //self.displayName = displayName;
     }
 
     function onUpdate(dc as Dc) as Void {
@@ -25,9 +21,6 @@ class ChristchurchBusView extends BaseChristchurchBusView {
         var screenHeight = dc.getHeight();
 
         var lineHeight = dc.getFontHeight(Graphics.FONT_SYSTEM_TINY);
-        // if (dc.getFontHeight(Graphics.FONT_SYSTEM_XTINY) == lineHeight) {
-        //     dateFont = Graphics.FONT_SYSTEM_XTINY;
-        // }
 
         var nameColumnX = calculateViewPortBoundaryX(cursorY, lineHeight, screenWidth, screenHeight, false);
         var nameColumnXBottom = calculateViewPortBoundaryX(cursorY + (Constants.LINES_TO_SHOW - 1) * (lineHeight + Constants.VERTICAL_SPACE), lineHeight, screenWidth, screenHeight, false);
@@ -46,18 +39,16 @@ class ChristchurchBusView extends BaseChristchurchBusView {
             while (lineCount < Constants.LINES_TO_SHOW && index < visits.size()) {
                 var visit = visits[index];
 
-                var journey = visit["MonitoredVehicleJourney"] as Dictionary<String, String or Number or Boolean or Dictionary>;
-                var call = (journey["MonitoredCall"] as Dictionary<String, String or Number or Boolean or Dictionary>);
-                var expectedDepartureTimeString = call["ExpectedDepartureTime"] as String;
-                var busAtStop = call["VehicleAtStop"] as Boolean;
-                var lineName = journey["PublishedLineName"] as String;
-                var destinationName = journey["DestinationName"] as String;
-
+                var expectedDepartureTimeString = visit["ExpectedDepartureTime"] as String;
                 var expectedDepartureTime = Utils.parseIsoDate(expectedDepartureTimeString);
                 if (expectedDepartureTime != null) {
                     var timeDifference = expectedDepartureTime.compare(Time.now());
                     if (timeDifference >= 0) {
                         var waitTime = (timeDifference / 60).format("%02d") + ":" + (timeDifference % 60).format("%02d");
+
+                        var busAtStop = visit["VehicleAtStop"] as Boolean;
+                        var lineName = visit["PublishedLineName"] as String;
+                        var destinationName = visit["DestinationName"] as String;
 
                         if (busAtStop) {
                             dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_WHITE);

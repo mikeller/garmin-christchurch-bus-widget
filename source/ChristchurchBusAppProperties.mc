@@ -76,6 +76,10 @@ class ChristchurchBusAppProperties {
         saveStops(localStops, needsUpdate);
     }
 
+    static function getStopResetTimeMin() as Number {
+        return Properties.getValue("stopResetTimeMin") as Number;
+    }
+
     static function getCustomUrl() as String? {
         var customUrl = Properties.getValue("customUrl") as String;
         if ("".equals(customUrl)) {

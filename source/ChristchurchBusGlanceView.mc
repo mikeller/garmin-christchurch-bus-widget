@@ -9,6 +9,12 @@ class ChristchurchBusGlanceView extends WatchUi.GlanceView {
     private var stop as Dictionary<String, Number or String>?;
     private var glanceTitle as String = WatchUi.loadResource(Rez.Strings.AppName) as String;
 
+    private var informationFound as Boolean = false;
+    private var busAtStop as Boolean = false;
+    private var lineName as String = "";
+    private var destinationName as String = "";
+    private var timeDifference as Number = 0;
+
     function initialize(stop as Dictionary?) {
         GlanceView.initialize();
 
@@ -35,8 +41,31 @@ class ChristchurchBusGlanceView extends WatchUi.GlanceView {
                     exception.printStackTrace();
                 }
 
+                informationFound = false;
                 if (cache != null) {
-                    //TODO: load glance content
+                    var visits = cache["MonitoredStopVisit"] as Array<Dictionary>?;
+                    if (visits != null) {
+                        var index = 0;
+                        while (index < visits.size()) {
+                            var visit = visits[index];
+
+                            var expectedDepartureTimeString = visit["ExpectedDepartureTime"] as String;
+                            var expectedDepartureTime = Utils.parseIsoDate(expectedDepartureTimeString);
+                            if (expectedDepartureTime != null) {
+                                timeDifference = expectedDepartureTime.compare(Time.now());
+                                if (timeDifference >= 0) {
+                                    busAtStop = visit["VehicleAtStop"] as Boolean;
+                                    lineName = visit["PublishedLineName"] as String;
+                                    destinationName = visit["DestinationName"] as String;
+                                    informationFound = true;
+
+                                    break;
+                                }
+                            }
+
+                            index++;
+                        }
+                    }
                 }
             }
         } catch (exception instanceof UnexpectedTypeException) {
@@ -49,10 +78,22 @@ class ChristchurchBusGlanceView extends WatchUi.GlanceView {
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
         dc.drawText(0, 0, Graphics.FONT_SYSTEM_TINY, glanceTitle, Graphics.TEXT_JUSTIFY_LEFT);
 
-        //TODO: draw glance content
-        //var secondLineY = lineHeight + Constants.VERTICAL_SPACE;
-        //var lineHeight = dc.getFontHeight(Graphics.FONT_SYSTEM_TINY);
+        var lineHeight = dc.getFontHeight(Graphics.FONT_SYSTEM_TINY);
+        var secondLineY = lineHeight + Constants.VERTICAL_SPACE;
 
+        if (informationFound) {
+            var waitTime = (timeDifference / 60).format("%02d") + ":" + (timeDifference % 60).format("%02d");
 
+            if (busAtStop) {
+                dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_WHITE);
+            } else {
+                dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
+            }
+
+            dc.drawText(0, secondLineY, Graphics.FONT_SYSTEM_TINY, waitTime + ": " + lineName + " (" + destinationName + ")", Graphics.TEXT_JUSTIFY_LEFT);
+        } else {
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
+            dc.drawText(0, secondLineY, Graphics.FONT_SYSTEM_TINY, Constants.NO_INFORMATION_STRING, Graphics.TEXT_JUSTIFY_LEFT);
+        }
     }
 }
