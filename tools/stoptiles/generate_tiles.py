@@ -292,11 +292,17 @@ def write_output(outdir, tiles, meta, date, static_dir=None):
     return [len(d) for d in encoded.values()]
 
 
-def _print_previous(path, meta, out):
+def _read_previous(path):
+    """Read a previous meta.json. Returns (meta or None, error or None)."""
     try:
         with open(path, "r", encoding="utf-8") as handle:
-            old = json.load(handle)
+            return json.load(handle), None
     except (OSError, ValueError) as error:
+        return None, error
+
+
+def _print_previous(old, error, meta, out):
+    if old is None:
         print("previous meta: unreadable (%s)" % error, file=out)
         return
     print("previous meta: n=%s h=%s gv=%s" % (old.get("n"), old.get("h"), old.get("gv")),
@@ -316,6 +322,8 @@ def generate(input_path, outdir, etag="", date=None, previous_meta=None,
 
     tiles = build_tiles(stops)
     meta = build_meta(date, stops, etag)
+    # Read before write_output, which may replace the file (OUTDIR/meta.json).
+    previous = _read_previous(previous_meta) if previous_meta else (None, None)
     sizes = write_output(outdir, tiles, meta, date, static_dir)
 
     print("stops: %d" % len(stops), file=out)
@@ -327,7 +335,7 @@ def generate(input_path, outdir, etag="", date=None, previous_meta=None,
     print("hash: %s" % meta["h"], file=out)
     print("gv: %d" % meta["gv"], file=out)
     if previous_meta:
-        _print_previous(previous_meta, meta, out)
+        _print_previous(previous[0], previous[1], meta, out)
     return meta
 
 

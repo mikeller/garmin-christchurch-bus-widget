@@ -446,6 +446,22 @@ class OutputTests(unittest.TestCase):
             self.assertEqual((out / "index.html").read_text(encoding="utf-8"), "hi")
             self.assertFalse((out / "t" / "1" / "2.json").exists())
 
+    def test_previous_meta_inside_outdir_is_read_before_overwrite(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "site"
+            out.mkdir()
+            (out / "meta.json").write_text('{"v":1,"n":7,"h":"oldhash","gv":0}',
+                                           encoding="utf-8")
+            meta, text = run_generate(FIXTURE, out, previous_meta=str(out / "meta.json"))
+            self.assertIn("previous meta: n=7 h=oldhash gv=0", text)
+            self.assertIn("new meta:      n=4 h=%s" % meta["h"], text)
+
+    def test_unreadable_previous_meta_is_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, text = run_generate(FIXTURE, Path(tmp) / "site",
+                                   previous_meta=str(Path(tmp) / "missing.json"))
+            self.assertIn("previous meta: unreadable", text)
+
     def test_main_runs_and_prints_summary(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = io.StringIO()
