@@ -1,0 +1,184 @@
+# Builds the static stop tiles for "Departures near me" from the Metro GTFS
+# feed and publishes them to GitHub Pages.
+#
+# Schedule: once daily at 02:17 UTC (15:17 NZDT in summer, 14:17 NZST in
+# winter), after the feed's observed daily update at about 00:46 UTC. GitHub
+# may delay scheduled runs. The decision logic lives in
+# tools/stoptiles/deploy_decision.py so that it can be unit tested locally.
+#
+# Repository prerequisites:
+#   * Secret METRO_GTFS_KEY: a Metro subscription key for the GTFS feed. It is
+#     separate from the key compiled into the app.
+#   * Settings > Pages > Source: "GitHub Actions".
+#   * Optional repository variables (Settings > Variables) to tune the sanity
+#     check without editing this file: STOP_TILES_MAX_DROP_PERCENT (default 10)
+#     and STOP_TILES_MIN_STOPS (default 1800).
+name: Stop tiles
+
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Deploy even if the stop data and generator version are unchanged'
+        type: boolean
+        default: false
+  push:
+    branches:
+      - master
+    paths:
+      - 'tools/stoptiles/**'
+      - '.github/workflows/stop-tiles.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  GTFS_URL: https://apis.metroinfo.co.nz/rti/gtfs/v1/gtfs.zip
+  # A stop count drop of more than this percentage versus the deployed meta.json
+  # fails the run, as does a count below the absolute floor.
+  MAX_DROP_PERCENT: ${{ vars.STOP_TILES_MAX_DROP_PERCENT || '10' }}
+  MIN_STOPS: ${{ vars.STOP_TILES_MIN_STOPS || '1800' }}
+  FORCE: ${{ inputs.force && 'true' || 'false' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      deploy: ${{ steps.decide.outputs.deploy || 'false' }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run generator unit tests
+        run: python3 -m unittest discover tools/stoptiles
+
+      - name: Read the deployed meta.json
+        id: deployed
+        env:
+          # Pages hostnames are lower case. The run id defeats CDN caching.
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/stoptiles"
+          url="https://${OWNER,,}.github.io/${REPO}/meta.json?run=${GITHUB_RUN_ID}"
+          code=$(curl --silent --show-error --max-time 60 --retry 3 \
+            --header 'Cache-Control: no-cache' \
+            --output "$RUNNER_TEMP/stoptiles/deployed-meta.json" \
+            --write-out '%{http_code}' "$url")
+          python3 tools/stoptiles/deploy_decision.py classify-deployed \
+            --http-code "$code" | tee -a "$GITHUB_OUTPUT"
+          if [ "$code" != 200 ]; then
+            rm -f "$RUNNER_TEMP/stoptiles/deployed-meta.json"
+          fi
+
+      - name: Plan the gtfs.zip request
+        id: plan
+        run: |
+          set -euo pipefail
+          python3 tools/stoptiles/deploy_decision.py plan-fetch \
+            --deployed "$RUNNER_TEMP/stoptiles/deployed-meta.json" \
+            --force "$FORCE" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Fetch gtfs.zip
+        id: fetch
+        env:
+          METRO_GTFS_KEY: ${{ secrets.METRO_GTFS_KEY }}
+          IF_NONE_MATCH: ${{ steps.plan.outputs.if_none_match }}
+          MODE: ${{ steps.plan.outputs.mode }}
+        run: |
+          set -euo pipefail
+          : "${METRO_GTFS_KEY:?the METRO_GTFS_KEY secret is not set}"
+          work="$RUNNER_TEMP/stoptiles"
+          # Request headers go to curl on stdin so the key never appears in
+          # argv or output. 304 is not a curl error, so --fail still rejects
+          # every 4xx and 5xx while a conditional request can return 304.
+          code=$({
+            printf 'Ocp-Apim-Subscription-Key: %s\n' "$METRO_GTFS_KEY"
+            if [ "$MODE" = conditional ]; then
+              printf 'If-None-Match: %s\n' "$IF_NONE_MATCH"
+            fi
+          } | curl --silent --show-error --fail --max-time 300 --retry 3 \
+            --header @- \
+            --dump-header "$work/gtfs-response-headers.txt" \
+            --output "$work/gtfs.zip" \
+            --write-out '%{http_code}' "$GTFS_URL")
+          conditional=false
+          if [ "$MODE" = conditional ]; then conditional=true; fi
+          python3 tools/stoptiles/deploy_decision.py classify-fetch \
+            --http-code "$code" --conditional "$conditional" \
+            --file "$work/gtfs.zip" | tee -a "$GITHUB_OUTPUT"
+          if [ "$code" = 200 ]; then
+            python3 tools/stoptiles/deploy_decision.py etag \
+              "$work/gtfs-response-headers.txt" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate the tiles
+        if: steps.fetch.outputs.result == 'download'
+        env:
+          ETAG: ${{ steps.fetch.outputs.etag }}
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/stoptiles"
+          args=()
+          if [ -f "$work/deployed-meta.json" ]; then
+            args+=(--previous-meta "$work/deployed-meta.json")
+          fi
+          python3 tools/stoptiles/generate_tiles.py "$work/gtfs.zip" site \
+            --etag "$ETAG" "${args[@]}"
+
+      - name: Sanity check and decide whether to deploy
+        id: decide
+        if: steps.fetch.outputs.result == 'download'
+        run: |
+          set -euo pipefail
+          python3 tools/stoptiles/deploy_decision.py decide \
+            --new site/meta.json \
+            --deployed "$RUNNER_TEMP/stoptiles/deployed-meta.json" \
+            --force "$FORCE" \
+            --max-drop-percent "$MAX_DROP_PERCENT" \
+            --min-stops "$MIN_STOPS" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Summarise
+        env:
+          FETCH_RESULT: ${{ steps.fetch.outputs.result }}
+          DEPLOY: ${{ steps.decide.outputs.deploy }}
+          REASON: ${{ steps.decide.outputs.reason }}
+        run: |
+          set -euo pipefail
+          if [ "$FETCH_RESULT" = unchanged ]; then
+            echo 'gtfs.zip is unchanged (HTTP 304): nothing to deploy.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Deploy: ${DEPLOY} (${REASON})" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload the Pages artifact
+        if: steps.decide.outputs.deploy == 'true'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.deploy == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
