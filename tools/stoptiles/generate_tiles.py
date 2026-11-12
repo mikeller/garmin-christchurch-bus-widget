@@ -277,11 +277,13 @@ def write_output(outdir, tiles, meta, date, static_dir=None):
         encoded[(ty, tx)] = data
 
     tile_root = os.path.join(outdir, "t")
-    if os.path.isdir(tile_root):
-        shutil.rmtree(tile_root)  # drop stale tiles from a previous run
     os.makedirs(outdir, exist_ok=True)
     if static_dir:
         shutil.copytree(static_dir, outdir, dirs_exist_ok=True)
+    # Clear tiles after the static copy so a t/ in the static directory, like
+    # one left by a previous run, cannot leave tiles this run did not generate.
+    if os.path.isdir(tile_root):
+        shutil.rmtree(tile_root)
     for (ty, tx), data in encoded.items():
         directory = os.path.join(tile_root, str(ty))
         os.makedirs(directory, exist_ok=True)

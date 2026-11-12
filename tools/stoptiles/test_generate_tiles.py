@@ -446,6 +446,19 @@ class OutputTests(unittest.TestCase):
             self.assertEqual((out / "index.html").read_text(encoding="utf-8"), "hi")
             self.assertFalse((out / "t" / "1" / "2.json").exists())
 
+    def test_static_dir_cannot_restore_stale_tiles(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "site"
+            static = Path(tmp) / "static"
+            (static / "t" / "1").mkdir(parents=True)
+            (static / "t" / "1" / "2.json").write_text("stale", encoding="utf-8")
+            (static / "index.html").write_text("hi", encoding="utf-8")
+            run_generate(FIXTURE, out, static_dir=str(static))
+            self.assertEqual((out / "index.html").read_text(encoding="utf-8"), "hi")
+            self.assertFalse((out / "t" / "1" / "2.json").exists())
+            for tile in (out / "t").rglob("*.json"):
+                self.assertNotEqual(tile.read_text(encoding="utf-8"), "stale")
+
     def test_previous_meta_inside_outdir_is_read_before_overwrite(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "site"
