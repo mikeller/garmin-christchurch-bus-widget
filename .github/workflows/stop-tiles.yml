@@ -13,6 +13,51 @@
 #   * Optional repository variables (Settings > Variables) to tune the sanity
 #     check without editing this file: STOP_TILES_MAX_DROP_PERCENT (default 10)
 #     and STOP_TILES_MIN_STOPS (default 1800).
+#   * Settings > General > Features > Issues must be enabled for the failure
+#     alert below to be able to open an issue.
+#
+# Smoke test (job smoke-test): after a deploy, fetches the published meta.json
+# and the tile of stop 53090 (a Bus Interchange platform; its tile id is
+# computed from the build output, not hard-coded) and fails the run on a
+# missing or non-JSON response, an oversized tile, a missing stop, or an h/gv
+# mismatch. It retries for about 8 minutes to allow for CDN propagation. It
+# also asserts that a tile far outside coverage returns 404: that is why the
+# watch sees responseCode -400 there. The assertions live in
+# tools/stoptiles/smoke_test.py and are unit tested.
+#
+# Failure alerting (job alert), scheduled runs only.
+#   Verified (GitHub docs, "Notifications for workflow runs",
+#   https://docs.github.com/en/actions/concepts/workflows-and-actions/notifications-for-workflow-runs):
+#   notifications for a scheduled workflow go to one user: the user who
+#   initially created the workflow, or, if a different user changes the cron
+#   syntax, that user; after a disable and re-enable, the user who re-enabled
+#   it. Runs you trigger yourself (push, manual) notify you. A failure
+#   notification is only sent when that user has Actions notifications enabled.
+#   Not verified: that this reaches a human reliably. It depends on one
+#   person's notification settings and on who GitHub considers the actor, and a
+#   run that never starts (see the keep-alive notes) produces no notification
+#   at all. So when a scheduled run fails, job alert also opens, or comments
+#   on, an issue titled "Stop tiles workflow failed" (tools/stoptiles/
+#   report_failure.py) using GITHUB_TOKEN with issues: write in that job only.
+#   The issue is not closed automatically.
+#
+# Keep-alive (job keepalive), scheduled runs only.
+#   Verified (GitHub docs, "Events that trigger workflows", schedule event):
+#   in a public repository, scheduled workflows are automatically disabled
+#   when no repository activity has occurred in 60 days. Verified (REST docs,
+#   "Enable a workflow"): PUT /repos/{owner}/{repo}/actions/workflows/{id}/
+#   enable sets the workflow to active and needs the Actions: write permission.
+#   Chosen mechanism: each scheduled run calls that endpoint for this workflow
+#   (tools/stoptiles/keepalive.py, no third-party action, no commit).
+#   Not verified (undocumented by GitHub): that enabling an already enabled
+#   workflow restarts the 60 day clock, what exactly counts as "repository
+#   activity", and whether the successful scheduled runs or the enable call
+#   count as activity. The pattern is the one used by the community action
+#   liskin/gh-workflow-keepalive, which makes the same call. Limit: this job
+#   lives in the workflow it protects, so it cannot rescue a workflow that is
+#   already disabled. Re-enable that one by hand (Actions tab, or
+#   `gh workflow enable stop-tiles.yml`); notifications then go to whoever
+#   re-enabled it. Dummy commits are deliberately not used.
 name: Stop tiles
 
 on:
@@ -40,6 +85,10 @@ concurrency:
 
 env:
   GTFS_URL: https://apis.metroinfo.co.nz/rti/gtfs/v1/gtfs.zip
+  # Reference stop for the smoke test: a Bus Interchange platform.
+  SMOKE_STOP_CODE: '53090'
+  # A tile far outside coverage (latitude 0, longitude 0): must be a 404.
+  SMOKE_OUTSIDE_TILE: t/0/0.json
   # A stop count drop of more than this percentage versus the deployed meta.json
   # fails the run, as does a count below the absolute floor.
   MAX_DROP_PERCENT: ${{ vars.STOP_TILES_MAX_DROP_PERCENT || '10' }}
@@ -52,6 +101,10 @@ jobs:
     timeout-minutes: 15
     outputs:
       deploy: ${{ steps.decide.outputs.deploy || 'false' }}
+      # What the smoke test expects the published site to contain.
+      h: ${{ steps.smoke_values.outputs.h }}
+      gv: ${{ steps.smoke_values.outputs.gv }}
+      tile: ${{ steps.smoke_values.outputs.tile }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -149,6 +202,14 @@ jobs:
             --max-drop-percent "$MAX_DROP_PERCENT" \
             --min-stops "$MIN_STOPS" | tee -a "$GITHUB_OUTPUT"
 
+      - name: Record the values the smoke test expects
+        id: smoke_values
+        if: steps.decide.outputs.deploy == 'true'
+        run: |
+          set -euo pipefail
+          python3 tools/stoptiles/smoke_test.py build-values \
+            --site site --stop "$SMOKE_STOP_CODE" | tee -a "$GITHUB_OUTPUT"
+
       - name: Summarise
         env:
           FETCH_RESULT: ${{ steps.fetch.outputs.result }}
@@ -183,3 +244,98 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  smoke-test:
+    needs: [build, deploy]
+    # Only after a deploy that actually happened and succeeded: the implicit
+    # success() also skips this job when the deploy job failed or was skipped.
+    if: needs.build.outputs.deploy == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the smoke test script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/stoptiles
+
+      - name: Smoke test the published tiles
+        env:
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          EXPECTED_H: ${{ needs.build.outputs.h }}
+          EXPECTED_GV: ${{ needs.build.outputs.gv }}
+          TILE: ${{ needs.build.outputs.tile }}
+        run: |
+          set -euo pipefail
+          python3 tools/stoptiles/smoke_test.py check \
+            --base-url "https://${OWNER,,}.github.io/${REPO}" \
+            --expect-h "$EXPECTED_H" \
+            --expect-gv "$EXPECTED_GV" \
+            --tile "$TILE" \
+            --stop "$SMOKE_STOP_CODE" \
+            --outside-path "$SMOKE_OUTSIDE_TILE" \
+            --max-seconds 480 --delay 30 \
+            --cache-bust "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+  keepalive:
+    # Independent of the build, so that it also runs when the build fails.
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Check out the keep-alive script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/stoptiles
+
+      - name: Re-enable this workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/stoptiles/keepalive.py
+
+  alert:
+    needs: [build, deploy, smoke-test, keepalive]
+    # A failed or timed-out (reported as cancelled) job in a scheduled run.
+    # Manual and push runs notify the person who started them.
+    if: >-
+      ${{ always() && github.event_name == 'schedule'
+      && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out the alert script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/stoptiles
+
+      - name: Open or update the failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+          SMOKE_RESULT: ${{ needs.smoke-test.result }}
+          KEEPALIVE_RESULT: ${{ needs.keepalive.result }}
+        run: |
+          set -euo pipefail
+          python3 tools/stoptiles/report_failure.py \
+            --run-url "$RUN_URL" --event "$EVENT" --ref "$REF" --sha "$SHA" \
+            --result "build=$BUILD_RESULT" \
+            --result "deploy=$DEPLOY_RESULT" \
+            --result "smoke-test=$SMOKE_RESULT" \
+            --result "keepalive=$KEEPALIVE_RESULT"
