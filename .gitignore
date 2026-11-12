@@ -61,3 +61,7 @@ dkms.conf
 
 *.swp
 .DS_Store
+
+# Generated stop tiles (tools/stoptiles)
+/site/
+__pycache__/

@@ -1,0 +1,88 @@
+{
+  "doc": [
+    "Shared test vectors for the stop tile contract v1. The Python tests (test_generate_tiles.py) and the Monkey C unit tests must both pass them.",
+    "e5Rounding: deg is a GTFS decimal string, e5 is floor(deg * 100000 + 0.5) computed exactly (half up, so -43.531005 rounds to -4353100 and not -4353101).",
+    "tileId: e5 is a latE5 or lonE5 value, tile is floorDiv(e5, 1000) (mathematical floor, toward negative infinity). trap is true where truncating division gives the wrong answer.",
+    "buffers: stepLatE5 and stepLonE5 are the per-step buffer (step k = 1..steps gives k * step), capLatE5 and capLonE5 are the final 3000 m cap, minStops is the widening threshold.",
+    "membership: a stop at (latE5, lonE5) is in tile (ty, tx) with buffer (bLat, bLon) iff ty*1000 - bLat <= latE5 <= ty*1000 + 999 + bLat and tx*1000 - bLon <= lonE5 <= tx*1000 + 999 + bLon (inclusive). member is the expected result.",
+    "nearest: stops are [stopCode, latE5, lonE5, name]. For each query, expected is the list of the nearest `count` stop codes, nearest first (all stops if count exceeds the stop count). Distance: dLat = stop.latE5 - query.latE5, dLon = stop.lonE5 - query.lonE5, d2 = (dLat * 1000)^2 + (dLon * 725)^2. This is the squared distance with dLon scaled by 725/1000, multiplied by 1e6 so that it is exact in integers (use 64-bit integers or exact arithmetic; do not divide by 1000 before squaring). Ties are broken by the lower stopCode."
+  ],
+  "e5Rounding": [
+    {"deg": "-43.531005", "e5": -4353100},
+    {"deg": "-43.531006", "e5": -4353101},
+    {"deg": "-43.531004", "e5": -4353100},
+    {"deg": "172.637005", "e5": 17263701},
+    {"deg": "172.637004", "e5": 17263700},
+    {"deg": "-43.57", "e5": -4357000},
+    {"deg": "0.000005", "e5": 1},
+    {"deg": "-0.000005", "e5": 0},
+    {"deg": "-0.000006", "e5": -1},
+    {"deg": "172.10665", "e5": 17210665}
+  ],
+  "tileId": [
+    {"e5": -4353100, "tile": -4354, "trap": true},
+    {"e5": -4353000, "tile": -4353, "trap": false},
+    {"e5": -4353001, "tile": -4354, "trap": true},
+    {"e5": -4352999, "tile": -4353, "trap": true},
+    {"e5": -4354000, "tile": -4354, "trap": false},
+    {"e5": -4354001, "tile": -4355, "trap": true},
+    {"e5": -4353999, "tile": -4354, "trap": true},
+    {"e5": -4299999, "tile": -4300, "trap": true},
+    {"e5": -4357000, "tile": -4357, "trap": false, "note": "stop code 25660, real boundary stop"},
+    {"e5": 17263700, "tile": 17263, "trap": false},
+    {"e5": 17263999, "tile": 17263, "trap": false},
+    {"e5": 17264000, "tile": 17264, "trap": false}
+  ],
+  "buffers": {
+    "steps": 7,
+    "stepLatE5": 360,
+    "stepLonE5": 496,
+    "capLatE5": 2698,
+    "capLonE5": 3719,
+    "minStops": 15
+  },
+  "membership": [
+    {"ty": -4354, "tx": 17263, "bLat": 0, "bLon": 0, "latE5": -4354000, "lonE5": 17263500, "member": true},
+    {"ty": -4354, "tx": 17263, "bLat": 0, "bLon": 0, "latE5": -4354001, "lonE5": 17263500, "member": false},
+    {"ty": -4354, "tx": 17263, "bLat": 0, "bLon": 0, "latE5": -4353001, "lonE5": 17263500, "member": true},
+    {"ty": -4354, "tx": 17263, "bLat": 0, "bLon": 0, "latE5": -4353000, "lonE5": 17263500, "member": false},
+    {"ty": -4354, "tx": 17263, "bLat": 0, "bLon": 0, "latE5": -4353500, "lonE5": 17263000, "member": true},
+    {"ty": -4354, "tx": 17263, "bLat": 0, "bLon": 0, "latE5": -4353500, "lonE5": 17262999, "member": false},
+    {"ty": -4354, "tx": 17263, "bLat": 0, "bLon": 0, "latE5": -4353500, "lonE5": 17263999, "member": true},
+    {"ty": -4354, "tx": 17263, "bLat": 0, "bLon": 0, "latE5": -4353500, "lonE5": 17264000, "member": false},
+    {"ty": -4354, "tx": 17263, "bLat": 360, "bLon": 496, "latE5": -4354360, "lonE5": 17263500, "member": true},
+    {"ty": -4354, "tx": 17263, "bLat": 360, "bLon": 496, "latE5": -4354361, "lonE5": 17263500, "member": false},
+    {"ty": -4354, "tx": 17263, "bLat": 360, "bLon": 496, "latE5": -4352641, "lonE5": 17263500, "member": true},
+    {"ty": -4354, "tx": 17263, "bLat": 360, "bLon": 496, "latE5": -4352640, "lonE5": 17263500, "member": false},
+    {"ty": -4354, "tx": 17263, "bLat": 360, "bLon": 496, "latE5": -4353500, "lonE5": 17262504, "member": true},
+    {"ty": -4354, "tx": 17263, "bLat": 360, "bLon": 496, "latE5": -4353500, "lonE5": 17262503, "member": false},
+    {"ty": -4354, "tx": 17263, "bLat": 360, "bLon": 496, "latE5": -4353500, "lonE5": 17264495, "member": true},
+    {"ty": -4354, "tx": 17263, "bLat": 360, "bLon": 496, "latE5": -4353500, "lonE5": 17264496, "member": false},
+    {"ty": -4354, "tx": 17263, "bLat": 2698, "bLon": 3719, "latE5": -4356698, "lonE5": 17263500, "member": true},
+    {"ty": -4354, "tx": 17263, "bLat": 2698, "bLon": 3719, "latE5": -4356699, "lonE5": 17263500, "member": false},
+    {"ty": -4354, "tx": 17263, "bLat": 2698, "bLon": 3719, "latE5": -4350303, "lonE5": 17263500, "member": true},
+    {"ty": -4354, "tx": 17263, "bLat": 2698, "bLon": 3719, "latE5": -4350302, "lonE5": 17263500, "member": false},
+    {"ty": -4354, "tx": 17263, "bLat": 2698, "bLon": 3719, "latE5": -4353500, "lonE5": 17259281, "member": true},
+    {"ty": -4354, "tx": 17263, "bLat": 2698, "bLon": 3719, "latE5": -4353500, "lonE5": 17259280, "member": false},
+    {"ty": -4354, "tx": 17263, "bLat": 2698, "bLon": 3719, "latE5": -4353500, "lonE5": 17267718, "member": true},
+    {"ty": -4354, "tx": 17263, "bLat": 2698, "bLon": 3719, "latE5": -4353500, "lonE5": 17267719, "member": false}
+  ],
+  "nearest": {
+    "stops": [
+      [3001, -4352200, 17263000, "Stop A"],
+      [3002, -4353000, 17264000, "Stop B"],
+      [3003, -4353100, 17263000, "Stop C"],
+      [1500, -4352700, 17263000, "Stop D"],
+      [2000, -4353300, 17263000, "Stop E"],
+      [3004, -4353000, 17262500, "Stop F"],
+      [3005, -4352000, 17264000, "Stop G"],
+      [3006, -4355000, 17263000, "Stop H"]
+    ],
+    "queries": [
+      {"latE5": -4353000, "lonE5": 17263000, "count": 5, "expected": [3003, 1500, 2000, 3004, 3002], "note": "D and E tie, lower code first; B (dLon 1000) is nearer than A (dLat 800) because dLon is scaled by 0.725"},
+      {"latE5": -4352200, "lonE5": 17263000, "count": 5, "expected": [3001, 1500, 3005, 3004, 3003]},
+      {"latE5": -4352200, "lonE5": 17263000, "count": 3, "expected": [3001, 1500, 3005]},
+      {"latE5": -4353000, "lonE5": 17263000, "count": 20, "expected": [3003, 1500, 2000, 3004, 3002, 3001, 3005, 3006]}
+    ]
+  }
+}
