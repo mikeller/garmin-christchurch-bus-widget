@@ -129,12 +129,13 @@ jobs:
         run: |
           set -euo pipefail
           work="$RUNNER_TEMP/stoptiles"
-          args=()
-          if [ -f "$work/deployed-meta.json" ]; then
-            args+=(--previous-meta "$work/deployed-meta.json")
-          fi
+          # The deployed meta.json is deliberately not passed as
+          # --previous-meta: it is only a log line, and the generator fails on
+          # a file that is valid JSON but not an object. deploy_decision.py
+          # treats such a file as having no baseline, so passing it here would
+          # stop the run before a repaired meta.json could be published.
           python3 tools/stoptiles/generate_tiles.py "$work/gtfs.zip" site \
-            --etag "$ETAG" "${args[@]}"
+            --etag "$ETAG"
 
       - name: Sanity check and decide whether to deploy
         id: decide
