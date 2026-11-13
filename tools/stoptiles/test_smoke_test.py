@@ -11,6 +11,7 @@ import http.server
 import io
 import json
 import os
+import socket
 import tempfile
 import threading
 import unittest
@@ -68,6 +69,44 @@ class StubSite:
         self.server.shutdown()
         self.server.server_close()
         self.thread.join()
+
+
+@contextlib.contextmanager
+def stalled_body_server(status_line=b"HTTP/1.1 503 Service Unavailable"):
+    """A server that sends an HTTP error status and headers, then stalls.
+
+    It promises 100 body bytes, sends 3 and holds the connection open, so a
+    client reading the body hits its timeout. Yields the base URL.
+    """
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(5)
+    listener.settimeout(0.05)
+    connections = []
+    stop = threading.Event()
+
+    def serve():
+        while not stop.is_set():
+            try:
+                conn, _addr = listener.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+            connections.append(conn)
+            conn.recv(4096)
+            conn.sendall(status_line + b"\r\nContent-Length: 100\r\n\r\nabc")
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    try:
+        yield "http://127.0.0.1:%d" % listener.getsockname()[1]
+    finally:
+        stop.set()
+        thread.join()
+        listener.close()
+        for conn in connections:
+            conn.close()
 
 
 def routes_from_site(site_dir):
@@ -322,6 +361,18 @@ class CheckFailureCasesTest(SiteTestCase):
                 self.assertIn("error:", err.getvalue())
 
 
+class HttpFetchTest(unittest.TestCase):
+    def test_http_error_status_is_returned_with_its_body(self):
+        with StubSite({"x": (503, b"unavailable")}) as stub:
+            self.assertEqual(st.http_fetch(stub.url + "/x", 5),
+                             (503, b"unavailable"))
+
+    def test_stalled_error_body_is_a_fetch_error(self):
+        with stalled_body_server() as url:
+            with self.assertRaises(st.FetchError):
+                st.http_fetch(url + "/x", 0.5)
+
+
 class RetryTest(SiteTestCase):
     def test_retries_until_the_cdn_serves_the_new_site(self):
         """The first requests see the old site (404 tile, old h); then it flips."""
@@ -348,6 +399,25 @@ class RetryTest(SiteTestCase):
         # Each attempt uses its own cache-busting query string.
         self.assertEqual(sorted({r.split("?smoke=")[1] for r in stub.requests}),
                          ["t-1", "t-2", "t-3"])
+
+    def test_retries_when_an_error_response_body_stalls(self):
+        """A 503 whose body never arrives is a transient failure, not a crash."""
+        now = [0.0]
+
+        def sleep(seconds):
+            now[0] += seconds
+
+        err = io.StringIO()
+        with stalled_body_server() as url:
+            ok = st.run_check(
+                lambda u: st.http_fetch(u, 0.2), url, self.meta["h"],
+                self.meta["gv"], self.tile, STOP, OUTSIDE, max_seconds=100,
+                delay=30, sleep=sleep, clock=lambda: now[0], out=err)
+        self.assertFalse(ok)
+        # Attempts at t = 0, 30, 60, 90, each retried rather than aborted.
+        self.assertEqual(err.getvalue().count("meta.json: request failed"), 4)
+        self.assertIn("reading the HTTP 503 response body failed", err.getvalue())
+        self.assertIn("failed after 4 attempt(s)", err.getvalue())
 
     def test_gives_up_when_the_time_budget_is_spent(self):
         now = [0.0]

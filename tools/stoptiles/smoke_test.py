@@ -148,8 +148,13 @@ def http_fetch(url, timeout):
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return response.status, response.read(READ_LIMIT)
     except urllib.error.HTTPError as error:
+        # An exception raised here is not caught by the sibling clause below, so
+        # a stalled or truncated error body must be converted explicitly.
         try:
             return error.code, error.read(READ_LIMIT)
+        except (http.client.HTTPException, OSError) as read_error:
+            raise FetchError("%s: reading the HTTP %d response body failed: %s"
+                             % (url.split("?", 1)[0], error.code, read_error))
         finally:
             error.close()
     except (urllib.error.URLError, http.client.HTTPException, OSError) as error:
