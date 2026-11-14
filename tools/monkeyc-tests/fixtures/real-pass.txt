@@ -1,0 +1,6 @@
+NearbyStopMathsTests.testDistance: PASSED
+RESULTS
+NearbyStopMathsTests.testDistance    PASSED
+Ran 27 tests
+
+PASSED (passed=27, failed=0, errors=0)
