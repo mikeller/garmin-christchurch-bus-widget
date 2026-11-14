@@ -298,7 +298,10 @@ def _read_previous(path):
     """Read a previous meta.json. Returns (meta or None, error or None)."""
     try:
         with open(path, "r", encoding="utf-8") as handle:
-            return json.load(handle), None
+            old = json.load(handle)
+        if not isinstance(old, dict):
+            raise ValueError("previous meta is not a JSON object")
+        return old, None
     except (OSError, ValueError) as error:
         return None, error
 

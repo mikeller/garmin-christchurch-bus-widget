@@ -475,6 +475,30 @@ class OutputTests(unittest.TestCase):
                                    previous_meta=str(Path(tmp) / "missing.json"))
             self.assertIn("previous meta: unreadable", text)
 
+    def test_non_object_previous_meta_is_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            previous = Path(tmp) / "old-meta.json"
+            for payload in ("[]", "42", '"old"', "true"):
+                with self.subTest(payload=payload):
+                    previous.write_text(payload, encoding="utf-8")
+                    _, text = run_generate(FIXTURE, Path(tmp) / "site",
+                                           previous_meta=str(previous))
+                    self.assertIn("previous meta: unreadable", text)
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        self.assertEqual(gt.main([str(FIXTURE), str(Path(tmp) / "site"),
+                                                  "--previous-meta", str(previous),
+                                                  "--date", "2026-11-12"]), 0)
+
+    def test_null_and_invalid_previous_meta_are_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            previous = Path(tmp) / "old-meta.json"
+            for payload in ("null", "{invalid"):
+                with self.subTest(payload=payload):
+                    previous.write_text(payload, encoding="utf-8")
+                    _, text = run_generate(FIXTURE, Path(tmp) / "site",
+                                           previous_meta=str(previous))
+                    self.assertIn("previous meta: unreadable", text)
+
     def test_main_runs_and_prints_summary(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = io.StringIO()
