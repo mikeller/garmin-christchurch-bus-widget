@@ -88,4 +88,12 @@ class ChristchurchBusAppProperties {
 
         return customUrl;
     }
+
+    static function nearbyEnabled() as Boolean {
+        return NearbyAvailability.enabled();
+    }
+
+    static function favouritesBeforeNearby() as Number {
+        return NearbyAvailability.favouritesBeforeNearby();
+    }
 }

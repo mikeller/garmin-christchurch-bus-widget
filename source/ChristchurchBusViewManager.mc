@@ -16,6 +16,7 @@ class ChristchurchBusViewManager {
     private var currentStopIndex as Number = 0;
 
     private var started as Boolean = false;
+    private var nearbyLocation as NearbyLocation?;
 
     private var retryTimer as Timer.Timer = new Timer.Timer();
     private var retryIndex as Number = -1;
@@ -34,6 +35,10 @@ class ChristchurchBusViewManager {
         }
 
         reader = new ChristchurchBusDataReader();
+        if (ChristchurchBusAppProperties.nearbyEnabled()) {
+            nearbyLocation = new NearbyLocation();
+            (nearbyLocation as NearbyLocation).start();
+        }
         behaviourDelegate = new ChristchurchBusBehaviorDelegate(method(:displayBusesForCurrentStop), method(:nextStop));
         currentView = new BaseChristchurchBusView(currentPageTitle, false);
 
@@ -46,6 +51,13 @@ class ChristchurchBusViewManager {
         Utils.log("Initial view loaded.");
 
         return [ currentView, behaviourDelegate ] as [ Views, InputDelegates ];
+    }
+
+    function stop() as Void {
+        if (nearbyLocation != null) {
+            (nearbyLocation as NearbyLocation).stop();
+            nearbyLocation = null;
+        }
     }
 
     private function switchView () as Void {

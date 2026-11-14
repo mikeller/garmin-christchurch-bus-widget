@@ -1,10 +1,35 @@
 project.manifest = manifest.xml
 
-base.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay
-descentg1.excludeAnnotations = roundScreen; colourDisplay
-instinct2.excludeAnnotations = roundScreen; colourDisplay
-instinct2s.excludeAnnotations = roundScreen; colourDisplay
-instinct2x.excludeAnnotations = roundScreen; colourDisplay
+base.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; noNearby
+# The 64 KB devices replace the base exclusions to retain the noNearby stub;
+# other devices inherit noNearby and compile the real nearby implementation.
+descentg1.excludeAnnotations = roundScreen; colourDisplay; nearby
+fenix5.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; nearby
+fenix5s.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; nearby
+fenix6.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; nearby
+fenix6s.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; nearby
+fenixchronos.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; nearby
+fr55.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; nearby
+fr645.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; nearby
+fr935.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; nearby
+instinct2.excludeAnnotations = roundScreen; colourDisplay; nearby
+instinct2s.excludeAnnotations = roundScreen; colourDisplay; nearby
+instinct2x.excludeAnnotations = roundScreen; colourDisplay; nearby
+instinctcrossover.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; nearby
+
+descentg1.resourcePath = $(descentg1.resourcePath); resources-nonearby
+fenix5.resourcePath = $(fenix5.resourcePath); resources-nonearby
+fenix5s.resourcePath = $(fenix5s.resourcePath); resources-nonearby
+fenix6.resourcePath = $(fenix6.resourcePath); resources-nonearby
+fenix6s.resourcePath = $(fenix6s.resourcePath); resources-nonearby
+fenixchronos.resourcePath = $(fenixchronos.resourcePath); resources-nonearby
+fr55.resourcePath = $(fr55.resourcePath); resources-nonearby
+fr645.resourcePath = $(fr645.resourcePath); resources-nonearby
+fr935.resourcePath = $(fr935.resourcePath); resources-nonearby
+instinct2.resourcePath = $(instinct2.resourcePath); resources-nonearby
+instinct2s.resourcePath = $(instinct2s.resourcePath); resources-nonearby
+instinct2x.resourcePath = $(instinct2x.resourcePath); resources-nonearby
+instinctcrossover.resourcePath = $(instinctcrossover.resourcePath); resources-nonearby
 
 descentmk351mm.resourcePath = $(descentmk351mm.resourcePath); resources-launcher-60x60
 descentmk343mm.resourcePath = $(descentmk343mm.resourcePath); resources-launcher-60x60

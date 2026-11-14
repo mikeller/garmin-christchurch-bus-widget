@@ -13,4 +13,10 @@
     <setting propertyKey="@Properties.customUrl" title="@Strings.CustomUrlTitle">
         <settingConfig type="url"/>
     </setting>
+    <setting propertyKey="@Properties.nearbyEnabled" title="@Strings.NearbyEnabledTitle">
+        <settingConfig type="boolean"/>
+    </setting>
+    <setting propertyKey="@Properties.favouritesBeforeNearby" title="@Strings.FavouritesBeforeNearbyTitle">
+        <settingConfig required="true" type="numeric" min="0" max="16" errorMessage="@Strings.FavouritesBeforeNearbyRangeError"/>
+    </setting>
 </settings>
