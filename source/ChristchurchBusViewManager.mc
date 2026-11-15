@@ -16,7 +16,7 @@ class ChristchurchBusViewManager {
     private var pages as Array<Dictionary> = [] as Array<Dictionary>;
     private var currentStopIndex as Number = 0;
     private var savedStopId as Number?;
-    private var rotation as Number = 0;
+    private var lastRequestAt as Dictionary<Number, Number> = {} as Dictionary<Number, Number>;
     private var requestsThisCycle as Number = 0;
     private var cycleStartedAt as Number = -1;
     private var started as Boolean = false;
@@ -407,6 +407,13 @@ class ChristchurchBusViewManager {
         }
         currentView = view;
         switchView();
+        // Display a validated cache entry immediately, including an expired
+        // entry marked stale, before any network slot or cycle budget is used.
+        var fresh = ChristchurchBusDataCache.tryGetCachedData(id, false);
+        var cached = fresh != null ? fresh : ChristchurchBusDataCache.tryGetCachedData(id, true);
+        if (cached != null) {
+            onBusDataReady(cached, id, false, fresh == null);
+        }
         refreshBusStopCache(currentStopIndex);
     }
 
@@ -502,29 +509,46 @@ class ChristchurchBusViewManager {
         if (pages.size() == 0) {
             return;
         }
-        // One visible request and at most seven rotating requests per cycle.
-        // Handles are stop ids, stable even when the page order changes.
-        var visible = pages[startIndex]["stopId"] as Number?;
         var now = Time.now().value();
         if (cycleStartedAt < 0 || now < cycleStartedAt ||
             now - cycleStartedAt >= Constants.REFRESH_DELAY_S) {
             cycleStartedAt = now;
             requestsThisCycle = 0;
         }
-        requestPage(startIndex);
-        for (var count = 0; count < pages.size() - 1 && requestsThisCycle < 8; count++) {
-            var index = (rotation + count) % pages.size();
-            var candidate = pages[index]["stopId"] as Number?;
-            if (candidate != null && candidate != visible) {
-                requestPage(index);
+        var entries = [] as Array;
+        var inFlight = [] as Array<Number>;
+        for (var i = 0; i < pages.size(); i++) {
+            var id = pages[i]["stopId"] as Number?;
+            entries.add([id, isFavourite(id), id == null ? 0 :
+                (lastRequestAt[id] as Number?) == null ? 0 : lastRequestAt[id] as Number]);
+            if (id != null && reader.isRunning(id as Number)) {
+                inFlight.add(id as Number);
             }
         }
-        rotation = (rotation + 7) % pages.size();
+        var visible = pages[startIndex]["stopId"] as Number?;
+        var stale = visible != null &&
+            ChristchurchBusDataCache.tryGetCachedData(visible as Number, false) == null;
+        var selected = NearbyDepartureSchedule.choose(entries, startIndex,
+            8 - requestsThisCycle, inFlight, stale);
+        for (var j = 0; j < selected.size(); j++) {
+            requestPage(selected[j], now);
+        }
         Utils.log("Departure requests this cycle: " + requestsThisCycle);
         requestDelayedRefresh();
     }
 
-    private function requestPage(index as Number) as Void {
+    private function isFavourite(id as Number?) as Boolean {
+        if (id != null) {
+            for (var i = 0; i < favourites.size(); i++) {
+                if (favourites[i]["stopId"] == id) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private function requestPage(index as Number, now as Number) as Void {
         if (requestsThisCycle >= 8) {
             return;
         }
@@ -534,6 +558,7 @@ class ChristchurchBusViewManager {
         }
         if (reader.getBusData(id as Number, id as Number, method(:onBusDataReady))) {
             requestsThisCycle++;
+            lastRequestAt[id as Number] = now;
         } else if (retryIndex == -1) {
             retryIndex = index;
             retryTimer.start(method(:onRetryRequest), 1000, false);
@@ -544,7 +569,7 @@ class ChristchurchBusViewManager {
         var index = retryIndex;
         retryIndex = -1;
         if (index >= 0 && index < pages.size()) {
-            requestPage(index);
+            refreshBusStopCache(index);
         }
     }
 

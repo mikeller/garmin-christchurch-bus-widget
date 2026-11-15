@@ -97,6 +97,10 @@ class ChristchurchBusDataReader {
         return true;
     }
 
+    function isRunning(handle as Number) as Boolean {
+        return requestIsRunning[handle] == true;
+    }
+
     private function persistStopName(stopId as Number, data as Dictionary<String, String or Array>) as Void {
         var visits = data["MonitoredStopVisit"] as Array<Dictionary>?;
         if (visits != null) {
