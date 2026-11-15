@@ -5,105 +5,110 @@ import Toybox.Test;
 (:debug)
 class RowWidthFixture {
     function getTextWidthInPixels(text as String, font as Graphics.FontType) as Number {
-        return text.length() * (font == Graphics.FONT_XTINY ? 3 : 5);
+        return text.length() * (font == Graphics.FONT_SYSTEM_SMALL ? 6 : 5);
     }
 }
 
 (:test)
-function testDepartureRowAlreadyFits(logger as Logger) as Boolean {
-    var fixture = new RowWidthFixture();
-    var fit = DepartureRowFit.fit("16:28", "8", "Lyttelton", 200, fixture);
-    Test.assertEqualMessage(true, "16:28: 8 (Lyttelton)".equals(fit[0]),
-                            "already fits: expected full row, got " + fit[0]);
-    Test.assertEqualMessage(Graphics.FONT_SYSTEM_TINY, fit[1],
-                            "already fits: expected system tiny, got " + fit[1]);
+function testDepartureBoldFontHeights(logger as Logger) as Boolean {
+    var fonts = DepartureRowFit.smallerFonts(
+        [Graphics.FONT_SYSTEM_SMALL, Graphics.FONT_SYSTEM_TINY, Graphics.FONT_SYSTEM_XTINY],
+        [29, 26, 26]);
+    Test.assertEqualMessage(2, fonts.size(), "equal-height regular font must be excluded");
+    Test.assertEqualMessage(Graphics.FONT_SYSTEM_SMALL, fonts[0], "first font is bold small");
+    Test.assertEqualMessage(Graphics.FONT_SYSTEM_TINY, fonts[1], "second font is bold tiny");
+    fonts = DepartureRowFit.smallerFonts(
+        [Graphics.FONT_SYSTEM_SMALL, Graphics.FONT_SYSTEM_TINY], [26, 26]);
+    Test.assertEqualMessage(1, fonts.size(), "no duplicate-height fonts");
     return true;
 }
 
 (:test)
-function testDepartureRowSmallerFont(logger as Logger) as Boolean {
+function testDeparturePageOneFont(logger as Logger) as Boolean {
     var fixture = new RowWidthFixture();
-    var fit = DepartureRowFit.fit("16:28", "8", "Lyttelton", 90, fixture);
-    Test.assertEqualMessage(true, "16:28: 8 (Lyttelton)".equals(fit[0]),
-                            "smaller font: expected full row, got " + fit[0]);
-    Test.assertEqualMessage(Graphics.FONT_XTINY, fit[1],
-                            "smaller font: expected xtiny, got " + fit[1]);
+    var fonts = [Graphics.FONT_SYSTEM_SMALL, Graphics.FONT_SYSTEM_TINY];
+    var rows = [["16:28", "8", "Lyttelton"], ["30:38", "29", "City Centre"]];
+    var widths = [[120, 105], [100, 100]];
+    var font = DepartureRowFit.chooseFont(rows, widths, fonts, fixture);
+    Test.assertEqualMessage(Graphics.FONT_SYSTEM_TINY, font,
+                            "second row cannot keep six destination characters at bold small");
+    for (var i = 0; i < rows.size(); i++) {
+        var row = rows[i] as Array;
+        var text = DepartureRowFit.fit(row[0], row[1], row[2], (widths[1] as Array)[i], font, fixture);
+        Test.assertEqualMessage(true, fixture.getTextWidthInPixels(text, font) <= 100,
+                                "each row uses one bold font and fits");
+    }
     return true;
 }
 
 (:test)
-function testDepartureRowTruncatesDestination(logger as Logger) as Boolean {
+function testDeparturePreferLargerBoldFont(logger as Logger) as Boolean {
     var fixture = new RowWidthFixture();
-    var fit = DepartureRowFit.fit("16:28", "8", "Lyttelton via ferry", 70, fixture);
-    Test.assertEqualMessage(Graphics.FONT_XTINY, fit[1],
-                            "truncate: expected xtiny, got " + fit[1]);
-    Test.assertEqualMessage(0, (fit[0] as String).find("16:28: 8 ("),
-                            "truncate: expected time and route prefix, got " + fit[0]);
-    Test.assertEqualMessage(true, (fit[0] as String).find("…)") != null,
-                            "truncate: expected ellipsis and closing bracket, got " + fit[0]);
-    Test.assertEqualMessage(true, fixture.getTextWidthInPixels(fit[0], fit[1]) <= 70,
-                            "truncate: expected width <= 70, got " + fixture.getTextWidthInPixels(fit[0], fit[1]));
+    var font = DepartureRowFit.chooseFont([["16:28", "8", "Lyttelton"]],
+        [[120], [100]], [Graphics.FONT_SYSTEM_SMALL, Graphics.FONT_SYSTEM_TINY], fixture);
+    Test.assertEqualMessage(Graphics.FONT_SYSTEM_SMALL, font,
+                            "six destination characters fit in larger bold font");
     return true;
 }
 
 (:test)
-function testDepartureRowEllipsisExactlyFits(logger as Logger) as Boolean {
+function testDeparturePreservesWholeRow(logger as Logger) as Boolean {
     var fixture = new RowWidthFixture();
-    var fit = DepartureRowFit.fit("16:28", "8", "Long destination", 36, fixture);
-    Test.assertEqualMessage(true, "16:28: 8 (…)".equals(fit[0]),
-                            "exact width: expected parenthesised ellipsis, got " + fit[0]);
-    Test.assertEqualMessage(36, fixture.getTextWidthInPixels(fit[0], fit[1]),
-                            "exact width: expected 36 pixels, got " + fixture.getTextWidthInPixels(fit[0], fit[1]));
+    var text = DepartureRowFit.fit("16:28", "8", "Lyttelton", 200,
+        Graphics.FONT_SYSTEM_SMALL, fixture);
+    Test.assertEqualMessage(true, "16:28: 8 (Lyttelton)".equals(text),
+                            "row that fits keeps original text");
     return true;
 }
 
 (:test)
-function testDepartureRowKeepsPrefix(logger as Logger) as Boolean {
+function testDepartureTruncatesOnlyDestination(logger as Logger) as Boolean {
     var fixture = new RowWidthFixture();
-    // The shortest parenthesised form has 12 characters at 3 pixels each;
-    // 35 pixels forces the prefix-only fallback without clipping that prefix.
-    var fit = DepartureRowFit.fit("16:28", "8", "Long destination", 35, fixture);
-    Test.assertEqualMessage(true, "16:28: 8".equals(fit[0]),
-                            "prefix fallback: expected time and route only, got " + fit[0]);
-    Test.assertEqualMessage(Graphics.FONT_XTINY, fit[1],
-                            "prefix fallback: expected xtiny, got " + fit[1]);
-    Test.assertEqualMessage(true, fixture.getTextWidthInPixels(fit[0], fit[1]) <= 35,
-                            "prefix fallback: expected width <= 35, got " + fixture.getTextWidthInPixels(fit[0], fit[1]));
+    var text = DepartureRowFit.fit("16:28", "8", "Lyttelton via ferry", 100,
+        Graphics.FONT_SYSTEM_TINY, fixture);
+    Test.assertEqualMessage(0, text.find("16:28: 8 ("), "time and route unchanged");
+    Test.assertEqualMessage(true, text.find("…)") != null, "destination ends in ellipsis");
+    Test.assertEqualMessage(true,
+        fixture.getTextWidthInPixels(text, Graphics.FONT_SYSTEM_TINY) <= 100,
+        "truncated row fits");
     return true;
 }
 
 (:test)
-function testDepartureRowMissingNames(logger as Logger) as Boolean {
+function testDepartureMinimumDestination(logger as Logger) as Boolean {
     var fixture = new RowWidthFixture();
-    var fit = DepartureRowFit.fit("16:28", null, null, 100, fixture);
-    Test.assertEqualMessage(true, "16:28:  ()".equals(fit[0]),
-                            "missing names: expected empty route and destination, got " + fit[0]);
-    fit = DepartureRowFit.fit("16:28", "", "", 25, fixture);
-    Test.assertEqualMessage(true, "16:28: ".equals(fit[0]),
-                            "empty names: expected time prefix without false ellipsis, got " + fit[0]);
-    Test.assertEqualMessage(true, fixture.getTextWidthInPixels(fit[0], fit[1]) <= 25,
-                            "empty names: expected width <= 25, got " + fixture.getTextWidthInPixels(fit[0], fit[1]));
+    var rows = [["16:28", "8", "Lyttelton via ferry"]];
+    var fonts = [Graphics.FONT_SYSTEM_SMALL, Graphics.FONT_SYSTEM_TINY];
+    // Six characters plus ellipsis need 108 px at small, 90 px at tiny.
+    var font = DepartureRowFit.chooseFont(rows, [[107], [90]], fonts, fixture);
+    Test.assertEqualMessage(Graphics.FONT_SYSTEM_TINY, font,
+                            "choose smaller bold font to retain six characters");
+    var text = DepartureRowFit.fit("16:28", "8", "Lyttelton via ferry", 90, font, fixture);
+    Test.assertEqualMessage(true, text.find("Lyttel") != null,
+                            "at least six destination characters remain");
     return true;
 }
 
 (:test)
-function testDepartureRowUnicodeDestination(logger as Logger) as Boolean {
+function testDepartureMissingNames(logger as Logger) as Boolean {
     var fixture = new RowWidthFixture();
-    var fit = DepartureRowFit.fit("16:28", "8", "Rāpaki (via ferry)", 70, fixture);
-    Test.assertEqualMessage(0, (fit[0] as String).find("16:28: 8 ("),
-                            "Unicode: expected time and route prefix, got " + fit[0]);
-    Test.assertEqualMessage(true, (fit[0] as String).find("…)") != null,
-                            "Unicode: expected ellipsis, got " + fit[0]);
-    Test.assertEqualMessage(true, fixture.getTextWidthInPixels(fit[0], fit[1]) <= 70,
-                            "Unicode: expected width <= 70, got " + fixture.getTextWidthInPixels(fit[0], fit[1]));
+    var text = DepartureRowFit.fit("16:28", null, null, 100,
+        Graphics.FONT_SYSTEM_TINY, fixture);
+    Test.assertEqualMessage(true, "16:28:  ()".equals(text), "null names remain empty");
+    text = DepartureRowFit.fit("16:28", "", "", 35,
+        Graphics.FONT_SYSTEM_TINY, fixture);
+    Test.assertEqualMessage(true, "16:28: ".equals(text), "no false ellipsis for empty name");
     return true;
 }
 
 (:test)
-function testDepartureRowNonPositiveWidth(logger as Logger) as Boolean {
+function testDepartureUnicodeAndNarrowRow(logger as Logger) as Boolean {
     var fixture = new RowWidthFixture();
-    var fit = DepartureRowFit.fit("16:28", "8", "Lyttelton", -1, fixture);
-    Test.assertEqualMessage(true, "16:28: 8".equals(fit[0]),
-                            "negative width: expected time and route fallback, got " + fit[0]);
+    var text = DepartureRowFit.fit("16:28", "8", "Rāpaki (via ferry)", 90,
+        Graphics.FONT_SYSTEM_TINY, fixture);
+    Test.assertEqualMessage(true, text.find("…)") != null, "Unicode name truncated");
+    text = DepartureRowFit.fit("16:28", "8", "Long destination", 35,
+        Graphics.FONT_SYSTEM_TINY, fixture);
+    Test.assertEqualMessage(true, "16:28: 8".equals(text), "route retained even in narrow row");
     return true;
 }

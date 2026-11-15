@@ -13,6 +13,10 @@ class ChristchurchBusView extends BaseChristchurchBusView {
     private static var fittedWidth as Number = -1;
     private static var fittedHeight as Number = -1;
     private static var fittedVisits as Array?;
+    private static var fittedFont as Graphics.FontType = Graphics.FONT_SYSTEM_TINY;
+    private static var fittedFontKey as Graphics.FontType = Graphics.FONT_SYSTEM_TINY;
+    private static var fittedLineHeight as Number = 0;
+    private static var fittedX as Number = 0;
         
     function initialize(data as Dictionary<String, String or Array>, displayName as String, dataIsStale as Boolean) {
         BaseChristchurchBusView.initialize(displayName, dataIsStale);
@@ -26,14 +30,6 @@ class ChristchurchBusView extends BaseChristchurchBusView {
         var screenWidth = dc.getWidth();
         var screenHeight = dc.getHeight();
 
-        var lineHeight = dc.getFontHeight(Graphics.FONT_SYSTEM_TINY);
-
-        var nameColumnX = calculateViewPortBoundaryX(cursorY, lineHeight, screenWidth, screenHeight, false);
-        var nameColumnXBottom = calculateViewPortBoundaryX(cursorY + (Constants.LINES_TO_SHOW - 1) * (lineHeight + Constants.VERTICAL_SPACE), lineHeight, screenWidth, screenHeight, false);
-        if (nameColumnXBottom > nameColumnX) {
-            nameColumnX = nameColumnXBottom;
-        }
-
         var now = Time.now();
         var second = now.value();
         var visitsToFit = data["MonitoredStopVisit"] as Array<Dictionary>?;
@@ -41,17 +37,16 @@ class ChristchurchBusView extends BaseChristchurchBusView {
         // text and must refit; a redraw within that second reuses the measured rows.
         if (second != fittedSecond ||
             !DepartureRowsKey.same(visitsToFit, fittedVisits, screenWidth, fittedWidth,
-                                   screenHeight, fittedHeight)) {
+                                   screenHeight, fittedHeight, fittedFont, fittedFontKey)) {
             fittedRows = [];
             fittedSecond = second;
             fittedWidth = screenWidth;
             fittedHeight = screenHeight;
             fittedVisits = visitsToFit;
             var index = 0;
-            var lineCount = 0;
-            var rowY = cursorY;
+            var rows = [] as Array;
             if (visitsToFit != null) {
-                while (lineCount < Constants.LINES_TO_SHOW && index < visitsToFit.size()) {
+                while (rows.size() < Constants.LINES_TO_SHOW && index < visitsToFit.size()) {
                     var visitToFit = visitsToFit[index];
                     var departureText = visitToFit["ExpectedDepartureTime"] as String?;
                     var departure = departureText != null ? Utils.parseIsoDate(departureText) : null;
@@ -59,20 +54,50 @@ class ChristchurchBusView extends BaseChristchurchBusView {
                         var difference = departure.compare(now);
                         if (difference >= 0) {
                             var wait = (difference / 60).format("%02d") + ":" + (difference % 60).format("%02d");
-                            var rightX = calculateViewPortBoundaryX(rowY, lineHeight, screenWidth, screenHeight, true);
-                            var available = rightX - nameColumnX - Constants.HORIZONTAL_SPACE;
-                            if (available < 1) {
-                                available = 1;
-                            }
-                            var route = visitToFit["PublishedLineName"] as String?;
-                            var destination = visitToFit["DestinationName"] as String?;
-                            var fitted = DepartureRowFit.fit(wait, route, destination, available, dc);
-                            fittedRows.add([fitted[0], fitted[1], visitToFit["VehicleAtStop"] == true]);
-                            rowY += lineHeight + Constants.VERTICAL_SPACE;
-                            lineCount++;
+                            rows.add([wait, visitToFit["PublishedLineName"],
+                                      visitToFit["DestinationName"], visitToFit["VehicleAtStop"] == true]);
                         }
                     }
                     index++;
+                }
+            }
+            var fonts = DepartureRowFit.effectiveFonts(dc);
+            var widths = [] as Array;
+            var lefts = [] as Array<Number>;
+            for (var f = 0; f < fonts.size(); f++) {
+                var height = dc.getFontHeight(fonts[f]);
+                var step = height + Constants.VERTICAL_SPACE;
+                var left = calculateViewPortBoundaryX(cursorY, height, screenWidth, screenHeight, false);
+                var bottomLeft = calculateViewPortBoundaryX(
+                    cursorY + (Constants.LINES_TO_SHOW - 1) * step, height,
+                    screenWidth, screenHeight, false);
+                if (bottomLeft > left) {
+                    left = bottomLeft;
+                }
+                lefts.add(left);
+                var limits = [] as Array<Number>;
+                for (var i = 0; i < rows.size(); i++) {
+                    var rowY = cursorY + i * step;
+                    var right = calculateViewPortBoundaryX(rowY, height, screenWidth, screenHeight, true);
+                    limits.add(rowY + height <= screenHeight - Constants.VERTICAL_SPACE ?
+                        right - left - Constants.HORIZONTAL_SPACE : 0);
+                }
+                widths.add(limits);
+            }
+            fittedFont = DepartureRowFit.chooseFont(rows, widths, fonts, dc);
+            fittedFontKey = fittedFont;
+            fittedLineHeight = dc.getFontHeight(fittedFont);
+            for (var f = 0; f < fonts.size(); f++) {
+                if (fonts[f] == fittedFont) {
+                    fittedX = lefts[f];
+                    var limits = widths[f] as Array<Number>;
+                    for (var i = 0; i < rows.size(); i++) {
+                        var row = rows[i] as Array;
+                        var fitted = DepartureRowFit.fit(row[0] as String, row[1] as String?,
+                            row[2] as String?, limits[i], fittedFont, dc);
+                        fittedRows.add([fitted, row[3]]);
+                    }
+                    break;
                 }
             }
         }
@@ -82,14 +107,14 @@ class ChristchurchBusView extends BaseChristchurchBusView {
         if (visits != null) {
             while (lineCount < fittedRows.size()) {
                 var row = fittedRows[lineCount] as Array;
-                if (row[2] as Boolean) {
+                if (row[1] as Boolean) {
                     dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_WHITE);
                 } else {
                     dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
                 }
-                dc.drawText(nameColumnX, cursorY, row[1] as Graphics.FontType,
+                dc.drawText(fittedX, cursorY, fittedFont,
                             row[0] as String, Graphics.TEXT_JUSTIFY_LEFT);
-                cursorY += lineHeight + Constants.VERTICAL_SPACE;
+                cursorY += fittedLineHeight + Constants.VERTICAL_SPACE;
                 lineCount++;
             }
         } else {
@@ -124,7 +149,9 @@ class ChristchurchBusView extends BaseChristchurchBusView {
             }
 
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
-            dc.drawText(nameColumnX, cursorY, Graphics.FONT_SYSTEM_TINY, errorMessage, Graphics.TEXT_JUSTIFY_LEFT);
+            dc.drawText(calculateViewPortBoundaryX(cursorY,
+                dc.getFontHeight(Graphics.FONT_SYSTEM_TINY), screenWidth, screenHeight, false),
+                cursorY, Graphics.FONT_SYSTEM_TINY, errorMessage, Graphics.TEXT_JUSTIFY_LEFT);
         }
     }
 
