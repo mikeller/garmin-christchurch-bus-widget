@@ -24,6 +24,8 @@ class ChristchurchBusViewManager {
     (:nearby) private var favouriteEntries as Array = [] as Array;
     (:nearby) private var fixAt as Number = 0;
     (:nearby) private var nearbyStatus as String?;
+    (:nearby) private var slotState as Number = NearbyPageOrder.LOCATING;
+    (:nearby) private var slotTileError as Boolean = false;
     (:nearby) private var tileLat as Number?;
     (:nearby) private var tileLon as Number?;
     private var retryTimer as Timer.Timer = new Timer.Timer();
@@ -53,17 +55,25 @@ class ChristchurchBusViewManager {
         currentView = new BaseChristchurchBusView(currentPageTitle, false, null, null);
         if (ChristchurchBusAppProperties.nearbyEnabled()) {
             setNearbyStatus(WatchUi.loadResource(Rez.Strings.Locating) as String);
-            showEmptyState(WatchUi.loadResource(Rez.Strings.Locating) as String, null);
+            initializeNearbyPages();
             nearbyLocation = new NearbyLocation();
             (nearbyLocation as NearbyLocation).start(method(:onNearbyLocation));
         }
-        if (pages.size() > 0) {
+        if (pages.size() > 0 && !ChristchurchBusAppProperties.nearbyEnabled()) {
             displayBusesForCurrentStop();
         } else if (!ChristchurchBusAppProperties.nearbyEnabled()) {
             showDisabledState();
         }
         started = true;
     }
+
+    (:nearby)
+    private function initializeNearbyPages() as Void {
+        rebuildPages();
+    }
+
+    (:noNearby)
+    private function initializeNearbyPages() as Void {}
 
     function getInitialView() as [ Views ] or [ Views, InputDelegates ] {
         return [currentView, behaviourDelegate] as [Views, InputDelegates];
@@ -129,8 +139,11 @@ class ChristchurchBusViewManager {
             return;
         }
         currentStopIndex = (currentStopIndex + 1) % pages.size();
-        ChristchurchBusDataCache.setLastStop(pages[currentStopIndex]["stopId"] as Number,
-            pages[0]["stopId"] as Number);
+        var selected = pages[currentStopIndex]["stopId"] as Number?;
+        if (selected != null) {
+            var firstFavourite = favourites.size() > 0 ? favourites[0]["stopId"] as Number : selected as Number;
+            ChristchurchBusDataCache.setLastStop(selected as Number, firstFavourite);
+        }
     }
 
     function manualRefresh() as Void {
@@ -197,9 +210,10 @@ class ChristchurchBusViewManager {
             refreshNearby(false);
         } else {
             clearNearby();
+            slotState = NearbyPageOrder.UNAVAILABLE;
+            slotTileError = false;
             setNearbyStatus(WatchUi.loadResource(Rez.Strings.NearbyUnavailable) as String);
-            showEmptyState(WatchUi.loadResource(Rez.Strings.NearbyUnavailable) as String,
-                WatchUi.loadResource(Rez.Strings.NearbyLocationHint) as String);
+            rebuildPages();
         }
     }
 
@@ -211,7 +225,6 @@ class ChristchurchBusViewManager {
         nearbyEntries = [];
         favouriteEntries = [];
         fixAt = 0;
-        rebuildPages();
     }
 
     (:nearby)
@@ -237,19 +250,18 @@ class ChristchurchBusViewManager {
             tileLon = null;
             clearNearby();
             if (result == ChristchurchBusTileReader.NO_STOPS) {
-                setNearbyStatus(WatchUi.loadResource(Rez.Strings.NoStopsNearby) as String);
-                showEmptyState(WatchUi.loadResource(Rez.Strings.NoStopsNearby) as String, null);
+                slotState = NearbyPageOrder.EMPTY;
             } else {
-                setNearbyStatus(WatchUi.loadResource(Rez.Strings.NearbyUnavailable) as String);
-                showEmptyState(WatchUi.loadResource(Rez.Strings.NearbyUnavailable) as String,
-                    WatchUi.loadResource(Rez.Strings.NearbyTileHint) as String);
+                slotState = NearbyPageOrder.UNAVAILABLE;
+                slotTileError = true;
             }
+            rebuildPages();
             return;
         }
         if (stops.size() == 0) {
             clearNearby();
-            setNearbyStatus(WatchUi.loadResource(Rez.Strings.NoStopsNearby) as String);
-            showEmptyState(WatchUi.loadResource(Rez.Strings.NoStopsNearby) as String, null);
+            slotState = NearbyPageOrder.EMPTY;
+            rebuildPages();
             return;
         }
         var codes = [] as Array<Number>;
@@ -259,6 +271,7 @@ class ChristchurchBusViewManager {
         var split = NearbyStopMaths.nearestSplit(stops, tileLat as Number, tileLon as Number,
             codes, NearbyStopMaths.NEARBY_COUNT);
         nearbyEntries = split[0] as Array;
+        slotState = nearbyEntries.size() == 0 ? NearbyPageOrder.EMPTY : NearbyPageOrder.READY;
         setNearbyStatus(null);
         favouriteEntries = stale ? [] as Array : split[1] as Array;
         fixAt = stale ? 0 : (nearbyLocation as NearbyLocation).getFixTime();
@@ -273,18 +286,23 @@ class ChristchurchBusViewManager {
 
     (:nearby)
     private function rebuildPages() as Void {
-        var selectedId = pages.size() > 0 ? pages[currentStopIndex]["stopId"] : savedStopId;
+        var selectedId = pages.size() > 0 ? pages[currentStopIndex]["stopId"] as Number? : savedStopId;
+        var oldIndex = pages.size() > 0 ? currentStopIndex : -1;
         savedStopId = null;
         var codes = [] as Array<Number>;
         for (var i = 0; i < favourites.size(); i++) {
             codes.add(favourites[i]["stopId"] as Number);
         }
-        var ordered = NearbyStopMaths.buildPageOrder(codes, nearbyEntries,
-            favouriteEntries, ChristchurchBusAppProperties.favouritesBeforeNearby());
+        var before = ChristchurchBusAppProperties.favouritesBeforeNearby();
+        var ordered = NearbyPageOrder.build(codes, nearbyEntries, favouriteEntries, before, slotState);
         var newPages = [] as Array<Dictionary>;
         for (var i = 0; i < ordered.size(); i++) {
             var row = ordered[i] as Array;
-            var code = row[NearbyStopMaths.PAGE_CODE] as Number;
+            var code = row[NearbyStopMaths.PAGE_CODE] as Number?;
+            if (code == null) {
+                newPages.add({"nearbySlot" => true});
+                continue;
+            }
             if (row[NearbyStopMaths.PAGE_IS_FAVOURITE] as Boolean) {
                 for (var j = 0; j < favourites.size(); j++) {
                     if (favourites[j]["stopId"] == code) {
@@ -307,13 +325,8 @@ class ChristchurchBusViewManager {
             }
         }
         pages = newPages;
-        currentStopIndex = 0;
-        for (var i = 0; i < pages.size(); i++) {
-            if (pages[i]["stopId"] == selectedId) {
-                currentStopIndex = i;
-                break;
-            }
-        }
+        currentStopIndex = NearbyPageOrder.selectedIndex(ordered, selectedId, oldIndex,
+            NearbyPageOrder.initialIndex(ordered, favourites.size(), before));
         if (pages.size() > 0) {
             displayBusesForCurrentStop();
         }
@@ -324,6 +337,10 @@ class ChristchurchBusViewManager {
             return;
         }
         var stop = pages[currentStopIndex];
+        if (isSlot(stop)) {
+            showSlot();
+            return;
+        }
         var id = stop["stopId"] as Number;
         var name = stop["displayName"] as String?;
         currentPageTitle = name == null || name == "" ? id.toString() : name as String;
@@ -337,6 +354,30 @@ class ChristchurchBusViewManager {
         switchView();
         refreshBusStopCache(currentStopIndex);
     }
+
+    (:nearby)
+    private function isSlot(stop as Dictionary) as Boolean {
+        return stop["nearbySlot"] == true;
+    }
+
+    (:noNearby)
+    private function isSlot(stop as Dictionary) as Boolean {
+        return false;
+    }
+
+    (:nearby)
+    private function showSlot() as Void {
+        var title = slotState == NearbyPageOrder.LOCATING ? Rez.Strings.Locating :
+            slotState == NearbyPageOrder.EMPTY ? Rez.Strings.NoStopsNearby : Rez.Strings.NearbyUnavailable;
+        var hint = slotState == NearbyPageOrder.UNAVAILABLE ?
+            WatchUi.loadResource(slotTileError ? Rez.Strings.NearbyTileHint :
+                Rez.Strings.NearbyLocationHint) as String : null;
+        currentView = new NearbyStatusView(WatchUi.loadResource(title) as String, hint);
+        switchView();
+    }
+
+    (:noNearby)
+    private function showSlot() as Void {}
 
     (:noNearby)
     private function distanceForStop(stop as Dictionary) as String? {
@@ -370,7 +411,7 @@ class ChristchurchBusViewManager {
 
     (:nearby)
     private function codeSubtitle(stop as Dictionary) as String? {
-        return isNearbyPage(stop) ? currentDistance : nearbyStatus;
+        return isNearbyPage(stop) ? currentDistance : null;
     }
 
     (:nearby)
@@ -388,7 +429,7 @@ class ChristchurchBusViewManager {
         }
         // One visible request and at most seven rotating requests per cycle.
         // Handles are stop ids, stable even when the page order changes.
-        var visible = pages[startIndex]["stopId"] as Number;
+        var visible = pages[startIndex]["stopId"] as Number?;
         var now = Time.now().value();
         if (cycleStartedAt < 0 || now < cycleStartedAt ||
             now - cycleStartedAt >= Constants.REFRESH_DELAY_S) {
@@ -398,7 +439,8 @@ class ChristchurchBusViewManager {
         requestPage(startIndex);
         for (var count = 0; count < pages.size() - 1 && requestsThisCycle < 8; count++) {
             var index = (rotation + count) % pages.size();
-            if ((pages[index]["stopId"] as Number) != visible) {
+            var candidate = pages[index]["stopId"] as Number?;
+            if (candidate != null && candidate != visible) {
                 requestPage(index);
             }
         }
@@ -411,8 +453,11 @@ class ChristchurchBusViewManager {
         if (requestsThisCycle >= 8) {
             return;
         }
-        var id = pages[index]["stopId"] as Number;
-        if (reader.getBusData(id, id, method(:onBusDataReady))) {
+        var id = pages[index]["stopId"] as Number?;
+        if (id == null) {
+            return;
+        }
+        if (reader.getBusData(id as Number, id as Number, method(:onBusDataReady))) {
             requestsThisCycle++;
         } else if (retryIndex == -1) {
             retryIndex = index;
