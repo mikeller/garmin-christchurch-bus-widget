@@ -183,6 +183,38 @@ class ChristchurchBusTileReader {
         }
     }
 
+    // Only inspect validated, unexpired tiles already in Storage. A title
+    // lookup must never start another network request or Position acquisition.
+    function cachedRowsFor(stopId as Number) as Array? {
+        try {
+            var stored = Storage.getValue(indexKey);
+            if (!(stored instanceof Array)) {
+                return null;
+            }
+            var keys = stored as Array;
+            for (var i = keys.size(); i > 0; i--) {
+                var key = keys[i - 1];
+                if (!(key instanceof String)) {
+                    continue;
+                }
+                var tile = readCache(key as String, false);
+                if (tile == null) {
+                    continue;
+                }
+                var rows = (tile as Dictionary)["s"] as Array;
+                for (var j = 0; j < rows.size(); j++) {
+                    var row = rows[j] as Array;
+                    if ((row[0] as Number) == stopId) {
+                        return rows;
+                    }
+                }
+            }
+        } catch (e) {
+            // A malformed or obsolete cache must not prevent favourite pages.
+        }
+        return null;
+    }
+
     function writeCache(key as String, tile as Dictionary) as Void {
         // The documented per-value cap is 32 KB; actual object-store capacity
         // varies by device. A tile is <= 4096 UTF-8 bytes on the wire, but

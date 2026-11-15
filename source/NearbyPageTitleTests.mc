@@ -3,7 +3,7 @@ import Toybox.Test;
 import Toybox.Graphics;
 
 (:debug, :nearby)
-class NearbyPageTitleTestMeasure extends NearbyPageTitleMeasure {
+class NearbyPageTitleTestMeasure {
     function width(text as String) as Number {
         return text.length() * 10;
     }

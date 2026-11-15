@@ -85,6 +85,42 @@ function testTileCacheBoundAndExpiry(logger as Logger) as Boolean {
 }
 
 (:test, :nearby)
+function testCachedFavouriteTitleRows(logger as Logger) as Boolean {
+    var index = Storage.getValue("nearby:test-index");
+    var previous = Storage.getValue("nearby:test-title");
+    var reader = new ChristchurchBusTileReader();
+    reader.useTestIndex();
+    try {
+        Storage.deleteValue("nearby:test-index");
+        Storage.deleteValue("nearby:test-title");
+        Test.assertMessage(reader.cachedRowsFor(53090) == null, "missing tile");
+        reader.writeCache("test-title", ChristchurchBusTileTestData.tile());
+        var rows = reader.cachedRowsFor(53090);
+        Test.assertMessage(rows != null, "matching validated tile");
+        Test.assertEqualMessage("Rāpaki Rd near Main Rd", ((rows as Array)[0] as Array)[3],
+            "raw tile name remains available");
+        Test.assertMessage(reader.cachedRowsFor(53091) == null, "not in cached tile");
+        Storage.setValue("nearby:test-title",
+            {"at" => 0, "tile" => ["obsolete"]} as PropertyValueType);
+        Test.assertMessage(reader.cachedRowsFor(53090) == null, "invalid old cache ignored");
+        Test.assertMessage(Storage.getValue("nearby:test-title") == null,
+            "invalid tile discarded");
+    } finally {
+        if (previous == null) {
+            Storage.deleteValue("nearby:test-title");
+        } else {
+            Storage.setValue("nearby:test-title", previous as PropertyValueType);
+        }
+        if (index == null) {
+            Storage.deleteValue("nearby:test-index");
+        } else {
+            Storage.setValue("nearby:test-index", index as PropertyValueType);
+        }
+    }
+    return true;
+}
+
+(:test, :nearby)
 function testTileCacheLarge(logger as Logger) as Boolean {
     var reader = new ChristchurchBusTileReader();
     reader.useTestIndex();

@@ -1,14 +1,6 @@
 import Toybox.Lang;
 import Toybox.Graphics;
 
-// Small width-measurer protocol for pure layout tests. Views use the Dc
-// directly, without Method references or symbol callbacks.
-class NearbyPageTitleMeasure {
-    function width(text as String) as Number {
-        return 0;
-    }
-}
-
 // Title layout is computed once in onLayout, never while drawing departure
 // rows. The parenthesised distance is an indivisible suffix.
 class NearbyPageTitle {
@@ -27,7 +19,7 @@ class NearbyPageTitle {
 
     // Injectable width measurement for the pure layout tests.
     static function fit(name as String, distance as String?, firstWidth as Number,
-                        secondWidth as Number, measure as NearbyPageTitleMeasure) as Array<String>? {
+                        secondWidth as Number, measure) as Array<String>? {
         return fitMeasured(name, distance, firstWidth, secondWidth, measure, null,
             Graphics.FONT_XTINY);
     }
@@ -39,7 +31,7 @@ class NearbyPageTitle {
     }
 
     static function truncate(name as String, distance as String?, firstWidth as Number,
-                             secondWidth as Number, measure as NearbyPageTitleMeasure) as Array<String>? {
+                             secondWidth as Number, measure) as Array<String>? {
         return truncateMeasured(name, distance, firstWidth, secondWidth, measure, null,
             Graphics.FONT_XTINY);
     }
@@ -50,15 +42,15 @@ class NearbyPageTitle {
         return truncateMeasured(name, distance, firstWidth, secondWidth, null, dc, font);
     }
 
-    private static function width(text as String, measure as NearbyPageTitleMeasure?, dc as Dc?,
+    private static function width(text as String, measure, dc as Dc?,
                                   font as Graphics.FontType) as Number {
         return dc != null ? (dc as Dc).getTextWidthInPixels(text, font) :
-            (measure as NearbyPageTitleMeasure).width(text);
+            measure.width(text) as Number;
     }
 
     private static function fitMeasured(name as String, distance as String?,
                                         firstWidth as Number, secondWidth as Number,
-                                        measure as NearbyPageTitleMeasure?, dc as Dc?,
+                                        measure, dc as Dc?,
                                         font as Graphics.FontType) as Array<String>? {
         var full = text(name, distance);
         if (width(full, measure, dc, font) <= firstWidth) {
@@ -117,7 +109,7 @@ class NearbyPageTitle {
 
     private static function truncateMeasured(name as String, distance as String?,
                                              firstWidth as Number, secondWidth as Number,
-                                             measure as NearbyPageTitleMeasure?, dc as Dc?,
+                                             measure, dc as Dc?,
                                              font as Graphics.FontType) as Array<String>? {
         var suffix = distance == null ? "" : "(" + (distance as String) + ")";
         if (distance != null && width(suffix, measure, dc, font) > secondWidth) {

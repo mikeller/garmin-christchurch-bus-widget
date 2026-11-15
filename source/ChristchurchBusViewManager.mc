@@ -392,7 +392,9 @@ class ChristchurchBusViewManager {
         }
         var id = stop["stopId"] as Number;
         var name = stop["displayName"] as String?;
-        currentPageTitle = name == null || name == "" ? id.toString() : name as String;
+        currentPageTitle = isNearbyStop(stop) ? name as String :
+            NearbyPageNames.favouriteTitle(name, id, cachedTitleRows(id),
+                WatchUi.loadResource(Rez.Strings.StopCodeFallback) as String);
         currentDistance = distanceForStop(stop);
         var view = new BaseChristchurchBusView(currentPageTitle, false, codeSubtitle(stop),
             pageDistanceSuffix(stop));
@@ -402,6 +404,26 @@ class ChristchurchBusViewManager {
         currentView = view;
         switchView();
         refreshBusStopCache(currentStopIndex);
+    }
+
+    (:nearby)
+    private function cachedTitleRows(id as Number) as Array? {
+        return tileReader.cachedRowsFor(id);
+    }
+
+    (:noNearby)
+    private function cachedTitleRows(id as Number) as Array? {
+        return null;
+    }
+
+    (:nearby)
+    private function isNearbyStop(stop as Dictionary) as Boolean {
+        return stop["nearby"] == true;
+    }
+
+    (:noNearby)
+    private function isNearbyStop(stop as Dictionary) as Boolean {
+        return false;
     }
 
     (:nearby)
