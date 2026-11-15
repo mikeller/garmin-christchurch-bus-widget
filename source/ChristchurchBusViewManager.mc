@@ -59,6 +59,10 @@ class ChristchurchBusViewManager {
             initializeNearbyPages();
             nearbyLocation = new NearbyLocation();
             (nearbyLocation as NearbyLocation).start(method(:onNearbyLocation));
+        } else {
+            // There is no rebuild when nearby is off; log the single-page
+            // decision too, so debug runs can distinguish a disabled setting.
+            logPageDecision();
         }
         if (pages.size() > 0 && !ChristchurchBusAppProperties.nearbyEnabled()) {
             displayBusesForCurrentStop();
