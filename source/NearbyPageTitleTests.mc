@@ -30,7 +30,10 @@ function testNearbyPageTitleWithDistance(logger as Logger) as Boolean {
         "last line keeps distance whole");
     lines = NearbyPageTitle.fit("LongOneWord", "188 m", 120, 70, width);
     Test.assertEqualMessage("LongOneWord", (lines as Array)[0], "name without spaces");
-    Test.assertEqualMessage("(188 m)", (lines as Array)[1], "distance stays together");
+    Test.assertEqualMessage("(188 m)", (lines as Array)[1],
+        "distance fits exactly without an unnecessary leading separator");
+    Test.assertMessage(NearbyPageTitle.fit("LongOneWord", "188 m", 120, 69, width) == null,
+        "a 69 px line cannot fit the 70 px atomic distance");
     Test.assertMessage(NearbyPageTitle.fit("ExtremelyLongStopNameWithoutSpaces",
         "188 m", 90, 100, width) == null, "font must shrink or name truncate");
     lines = NearbyPageTitle.truncate("ExtremelyLongStopNameWithoutSpaces",

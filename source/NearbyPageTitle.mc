@@ -48,7 +48,10 @@ class NearbyPageTitle {
             return [full];
         }
         var suffix = distance == null ? "" : " (" + (distance as String) + ")";
-        if (width(suffix, measure, dc, font) > secondWidth) {
+        // The separator belongs only to a line that also contains name text.
+        // A distance alone on the last line has no leading space.
+        var distanceOnly = distance == null ? "" : "(" + (distance as String) + ")";
+        if (width(distanceOnly, measure, dc, font) > secondWidth) {
             return null;
         }
         // Try complete words first. A break before the suffix preserves its
@@ -75,7 +78,7 @@ class NearbyPageTitle {
             return best;
         }
         if (distance != null && width(name, measure, dc, font) <= firstWidth) {
-            return [name, "(" + (distance as String) + ")"];
+            return [name, distanceOnly];
         }
         return null;
     }
