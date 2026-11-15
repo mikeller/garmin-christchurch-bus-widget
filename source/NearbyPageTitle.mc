@@ -4,6 +4,13 @@ import Toybox.Graphics;
 // Title layout is computed once in onLayout, never while drawing departure
 // rows. The parenthesised distance is an indivisible suffix.
 class NearbyPageTitle {
+    // Stay within the system-font family used by the ordinary favourite
+    // title. Garmin does not expose a font-weight property to inspect.
+    static function fonts() as Array<Graphics.FontType> {
+        return [Graphics.FONT_SYSTEM_SMALL, Graphics.FONT_SYSTEM_TINY,
+                Graphics.FONT_SYSTEM_XTINY];
+    }
+
     static function text(name as String, distance as String?) as String {
         return distance == null ? name : name + " (" + (distance as String) + ")";
     }
@@ -54,6 +61,9 @@ class NearbyPageTitle {
         if (width(distanceOnly, measure, dc, font) > secondWidth) {
             return null;
         }
+        if (distance != null && width(name, measure, dc, font) <= firstWidth) {
+            return [name, distanceOnly];
+        }
         // Try complete words first. A break before the suffix preserves its
         // spelling even if the name contains long unbroken GTFS tokens.
         var best = null as Array<String>?;
@@ -68,6 +78,9 @@ class NearbyPageTitle {
             var right = width(second, measure, dc, font);
             if (left <= firstWidth && right <= secondWidth) {
                 var balance = left > right ? left - right : right - left;
+                if (orphanedShortWord(first, name.substring(i + 1, name.length()) as String)) {
+                    balance += 10000;
+                }
                 if (balance < bestBalance) {
                     best = [first, second];
                     bestBalance = balance;
@@ -77,10 +90,19 @@ class NearbyPageTitle {
         if (best != null) {
             return best;
         }
-        if (distance != null && width(name, measure, dc, font) <= firstWidth) {
-            return [name, distanceOnly];
-        }
         return null;
+    }
+
+    private static function orphanedShortWord(first as String, secondName as String) as Boolean {
+        var last = 0;
+        for (var i = 0; i < first.length(); i++) {
+            if (" ".equals(first.substring(i, i + 1))) {
+                last = i + 1;
+            }
+        }
+        var nextSpace = secondName.find(" ");
+        var firstWordLength = nextSpace == null ? secondName.length() : nextSpace as Number;
+        return (last > 0 && first.length() - last <= 2) || firstWordLength <= 2;
     }
 
     private static function truncateMeasured(name as String, distance as String?,

@@ -35,13 +35,26 @@ class BaseChristchurchBusView extends WatchUi.View {
 
     function onLayout(dc as Dc) as Void {
         if (nearbyPage) {
-            // The first title line is near the narrow top of a round screen;
-            // its second line has a different, wider usable chord.
-            nearbyStartY = dc.getHeight() / 6;
-            var fonts = [Graphics.FONT_SYSTEM_SMALL, Graphics.FONT_SMALL,
-                         Graphics.FONT_TINY, Graphics.FONT_XTINY];
+            // One-line titles sit nearer the broad middle of a round screen.
+            // Two-line titles start higher to preserve room for departures.
+            nearbyStartY = dc.getHeight() / 4;
+            var fonts = NearbyPageTitle.fonts();
             nearbyTitleLines = [];
+            // Prefer a single line, even at a smaller system-font size, over
+            // a visually awkward break in a short name such as "Hereford St".
             for (var i = 0; i < fonts.size(); i++) {
+                nearbyFont = fonts[i] as Graphics.FontType;
+                var full = NearbyPageTitle.text(siteName, distanceSuffix);
+                if (dc.getTextWidthInPixels(full, nearbyFont) <=
+                    nearbyWidthAt(dc, nearbyStartY)) {
+                    nearbyTitleLines = [full];
+                    break;
+                }
+            }
+            if (nearbyTitleLines.size() == 0) {
+                nearbyStartY = dc.getHeight() / 6;
+            }
+            for (var i = 0; nearbyTitleLines.size() == 0 && i < fonts.size(); i++) {
                 nearbyFont = fonts[i] as Graphics.FontType;
                 var height = dc.getFontHeight(nearbyFont) + Constants.VERTICAL_SPACE;
                 var firstWidth = nearbyWidthAt(dc, nearbyStartY);
@@ -55,7 +68,7 @@ class BaseChristchurchBusView extends WatchUi.View {
                 }
             }
             if (nearbyTitleLines.size() == 0) {
-                nearbyFont = Graphics.FONT_XTINY;
+                nearbyFont = Graphics.FONT_SYSTEM_XTINY;
                 var firstWidth = nearbyWidthAt(dc, nearbyStartY);
                 var secondWidth = nearbyWidthAt(dc, nearbyStartY +
                     dc.getFontHeight(nearbyFont) + Constants.VERTICAL_SPACE);
