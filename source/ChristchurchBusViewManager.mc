@@ -5,6 +5,7 @@ import Toybox.Time;
 import Toybox.Timer;
 import Toybox.System;
 
+(:nearby)
 class ChristchurchBusViewManager {
     private var reader as ChristchurchBusDataReader;
     private var behaviourDelegate as WatchUi.BehaviorDelegate;

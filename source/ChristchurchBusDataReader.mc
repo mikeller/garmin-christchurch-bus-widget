@@ -97,6 +97,7 @@ class ChristchurchBusDataReader {
         return true;
     }
 
+    (:nearby)
     function isRunning(handle as Number) as Boolean {
         return requestIsRunning[handle] == true;
     }

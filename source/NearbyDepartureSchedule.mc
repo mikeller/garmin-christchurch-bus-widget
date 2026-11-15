@@ -3,6 +3,7 @@ import Toybox.Lang;
 // Pure request order. Entries are [stop ID, favourite, last attempt time].
 // Older attempts take precedence; favourites break ties. The visible stale
 // page goes first. Proximity in cycling order breaks remaining ties.
+(:nearby)
 class NearbyDepartureSchedule {
     static function choose(entries as Array, current as Number, cap as Number,
                            inFlight as Array<Number>, currentStale as Boolean) as Array<Number> {

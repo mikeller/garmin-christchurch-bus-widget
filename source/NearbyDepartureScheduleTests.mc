@@ -1,7 +1,7 @@
 import Toybox.Lang;
 import Toybox.Test;
 
-(:test)
+(:test, :nearby)
 function testNearbyDepartureScheduling(logger as Logger) as Boolean {
     var one = [[1000, true, 0]] as Array;
     var selected = NearbyDepartureSchedule.choose(one, 0, 8, [] as Array<Number>, true);
