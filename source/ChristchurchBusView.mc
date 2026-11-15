@@ -8,8 +8,8 @@ import Toybox.Time.Gregorian;
 class ChristchurchBusView extends BaseChristchurchBusView {
     var data as Dictionary<String, String or Array> = {} as Dictionary<String, String or Array>;
         
-    function initialize(data as Dictionary<String, String or Array>, displayName as String, dataIsStale as Boolean) {
-        BaseChristchurchBusView.initialize(displayName, dataIsStale);
+    function initialize(data as Dictionary<String, String or Array>, displayName as String, dataIsStale as Boolean, subtitle as String?, distanceSuffix as String?) {
+        BaseChristchurchBusView.initialize(displayName, dataIsStale, subtitle, distanceSuffix);
 
         self.data = data;
     }

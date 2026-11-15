@@ -27,6 +27,10 @@ class ChristchurchBusTileReader {
         indexKey = "nearby:test-index";
     }
 
+    function isPending() as Boolean {
+        return pendingKey != null;
+    }
+
     // JSON responseType produces a Dictionary for an object root. Reject
     // malformed data before it can reach the distance maths or persistent cache.
     static function validTile(body as Object?) as Boolean {

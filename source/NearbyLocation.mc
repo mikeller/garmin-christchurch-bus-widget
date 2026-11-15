@@ -14,9 +14,12 @@ class NearbyLocation {
     private var state as Number = IDLE;
     private var latE5 as Number?;
     private var lonE5 as Number?;
+    private var fixTimestamp as Number = 0;
     private var timeout as Timer.Timer = new Timer.Timer();
+    private var callback as Method?;
 
-    function start() as Void {
+    function start(callback as Method) as Void {
+        self.callback = callback;
         if (!ChristchurchBusAppProperties.nearbyEnabled()) {
             return;
         }
@@ -24,6 +27,7 @@ class NearbyLocation {
         // A last-known fix can be stale even when it has a good accuracy.
         try {
             if (accept(Position.getInfo())) {
+                notify();
                 return;
             }
             state = LOCATING;
@@ -53,6 +57,27 @@ class NearbyLocation {
         return [latE5 as Number, lonE5 as Number];
     }
 
+    function getFixTime() as Number {
+        return fixTimestamp;
+    }
+
+    // Re-read the last-known fix without enabling another location listener.
+    // This also invalidates a result once the five-minute fix window closes.
+    function refresh() as Void {
+        if (state != FIX) {
+            return;
+        }
+        try {
+            if (!accept(Position.getInfo())) {
+                state = NO_FIX;
+                notify();
+            }
+        } catch (e) {
+            state = NO_FIX;
+            notify();
+        }
+    }
+
     private function accept(info as Position.Info?) as Boolean {
         if (info == null || info.position == null || info.accuracy < Position.QUALITY_POOR || info.when == null) {
             return false;
@@ -64,6 +89,7 @@ class NearbyLocation {
         var degrees = (info.position as Position.Location).toDegrees();
         latE5 = NearbyStopMaths.toE5(degrees[0] as Double);
         lonE5 = NearbyStopMaths.toE5(degrees[1] as Double);
+        fixTimestamp = (info.when as Time.Moment).value();
         state = FIX;
         return true;
     }
@@ -84,8 +110,14 @@ class NearbyLocation {
         timeout.stop();
         disableEvents();
         state = hasFix ? FIX : NO_FIX;
+        notify();
     }
 
+    private function notify() as Void {
+        if (callback != null) {
+            (callback as Method).invoke();
+        }
+    }
     private function disableEvents() as Void {
         try {
             Position.enableLocationEvents(Position.LOCATION_DISABLE, null);
@@ -97,6 +129,7 @@ class NearbyLocation {
 
 (:noNearby)
 class NearbyLocation {
-    function start() as Void {}
+    function start(callback as Method) as Void {}
     function stop() as Void {}
+    function refresh() as Void {}
 }

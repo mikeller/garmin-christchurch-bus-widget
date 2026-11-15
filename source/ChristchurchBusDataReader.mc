@@ -6,10 +6,6 @@ import Toybox.Communications;
 class ChristchurchBusDataReader {
     private const DATA_PATH as String = "rti/siri/v1/sm";
 
-    private const NEAR as String = " near ";
-    private const BUS as String =  "Bus ";
-    private const PLATFORM as String =  " (Platform ";
-
     private var baseUrl as String = "https://apis.metroinfo.co.nz/";
 
     private var connectionProblem as Boolean = false;
@@ -108,22 +104,7 @@ class ChristchurchBusDataReader {
             var journey = visit["MonitoredVehicleJourney"] as Dictionary<String, String or Number or Boolean or Dictionary>;
             var stopName = (journey["MonitoredCall"] as Dictionary<String, String or Boolean or Dictionary>)["StopPointName"] as String;
             
-            var pos = stopName.find(NEAR);
-            if (pos != null) {
-                stopName = stopName.substring(0, pos) as String;
-            }
-
-            pos = stopName.find(BUS);
-            if (pos != null) {
-                stopName = stopName.substring(0, pos) + stopName.substring(pos + BUS.length(), stopName.length());
-            }
-            
-            pos = stopName.find(PLATFORM);
-            if (pos != null) {
-                stopName = stopName.substring(0, pos + 2) + stopName.substring(pos + PLATFORM.length(), stopName.length());
-            }
-
-            ChristchurchBusAppProperties.setStopNameIfEmpty(stopId, stopName);
+            ChristchurchBusAppProperties.setStopNameIfEmpty(stopId, NearbyPageNames.clean(stopName));
         }
     }
 

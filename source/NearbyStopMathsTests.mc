@@ -589,6 +589,25 @@ function testPageOrderNoFavouritesNoNearby(logger as Logger) as Boolean {
 }
 
 (:test, :nearby)
+function testNearbyOnlyOrdering(logger as Logger) as Boolean {
+    var split = NearbyStopMaths.nearestSplit(NearbyStopMathsTestData.vectorStops(),
+        -4353000, 17263000, [] as Array<Number>, 5);
+    for (var n = 0; n <= 16; n += (n == 0 ? 2 : 14)) {
+        var pages = NearbyStopMaths.buildPageOrder([] as Array<Number>,
+            split[0] as Array, split[1] as Array, n);
+        Test.assertEqualMessage("[3003, 1500, 2000, 3004, 3002]",
+            NearbyStopMathsTestData.codes(pages), "nearby-only N=" + n);
+        Test.assertEqualMessage("[]", NearbyStopMathsTestData.codes(split[1] as Array),
+            "no favourite distance");
+    }
+    var empty = NearbyStopMaths.nearestSplit([] as Array, -4353000, 17263000,
+        [] as Array<Number>, 5);
+    Test.assertEqualMessage(0, NearbyStopMaths.buildPageOrder([] as Array<Number>,
+        empty[0] as Array, empty[1] as Array, 0).size(), "empty tile");
+    return true;
+}
+
+(:test, :nearby)
 function testFavouritesBeforeNearbySettingFallback(logger as Logger) as Boolean {
     Test.assertEqualMessage(0, NearbyAvailability.normaliseFavouritesBeforeNearby(null), "blank");
     Test.assertEqualMessage(0, NearbyAvailability.normaliseFavouritesBeforeNearby(""), "empty string");

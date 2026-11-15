@@ -17,6 +17,9 @@
     <string id="Locating">Locating...</string>
     <string id="NearbyUnavailable">Nearby unavailable</string>
     <string id="NoStopsNearby">No stops nearby</string>
+    <string id="NearbyLocationHint">Check location; reopen outdoors</string>
+    <string id="NearbyTileHint">Check connection; retry</string>
+    <string id="ConfigureStopsHint">Configure stops in settings</string>
 
     <string id="NoStops" scope="glance">No stops!</string>
     <string id="NoBuses" scope="glance">No more buses!</string>

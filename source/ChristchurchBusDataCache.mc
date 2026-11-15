@@ -35,27 +35,27 @@ class ChristchurchBusDataCache {
         Storage.setValue(stopId, data as Dictionary<PropertyKeyType, PropertyValueType>);
     }
 
-    static function setLastStop(stopIndex as Number) as Void {
-        if (stopIndex != 0) {
+    static function setLastStop(stopId as Number, firstStopId as Number) as Void {
+        if (stopId != firstStopId) {
             var stopResetTimeMin = ChristchurchBusAppProperties.getStopResetTimeMin();
             if (stopResetTimeMin > 0) {
                 var resetTime = Time.now().add(new Time.Duration(stopResetTimeMin * 60));
                 var lastStopValue = {
-                    "stopIndex" => stopIndex,
+                    "stopId" => stopId,
                     "resetTime" => resetTime.value(),
                 };
                 Storage.setValue(Constants.LAST_STOP_INDEX_NAME, lastStopValue as PropertyValueType);
 
-                Utils.log("Updating last stop index: " + stopIndex + ", expires " + Utils.dateToIsoString(resetTime));
+                Utils.log("Updating last stop: " + stopId + ", expires " + Utils.dateToIsoString(resetTime));
 
                 return;
             } else if (stopResetTimeMin == -1) {
                 var lastStopValue = {
-                    "stopIndex" => stopIndex,
+                    "stopId" => stopId,
                 };
                 Storage.setValue(Constants.LAST_STOP_INDEX_NAME, lastStopValue as PropertyValueType);
 
-                Utils.log("Updating last stop index: " + stopIndex + ", never expires");
+                Utils.log("Updating last stop: " + stopId + ", never expires");
 
                 return;
             }
@@ -66,7 +66,7 @@ class ChristchurchBusDataCache {
         Utils.log("Reset last stop index.");
     }
 
-    static function getLastStop() as Number {
+    static function getLastStop(favourites as Array<Dictionary>) as Number? {
         var lastStopValue = Storage.getValue(Constants.LAST_STOP_INDEX_NAME) as Dictionary<String, Number>?;
         if (lastStopValue != null) {
             var resetTimeValue = lastStopValue["resetTime"] as Number?;
@@ -76,19 +76,34 @@ class ChristchurchBusDataCache {
             }
 
             if (resetTime == null || !resetTime.lessThan(Time.now())) {
-                var stopIndex = lastStopValue["stopIndex"] as Number?;
-                if (stopIndex == null) {
-                    stopIndex = 0;
+                var stopId = lastStopValue["stopId"] as Number?;
+                if (stopId == null) {
+                    var oldIndex = lastStopValue["stopIndex"] as Number?;
+                    if (oldIndex != null && oldIndex >= 0 && oldIndex < favourites.size()) {
+                        stopId = favourites[oldIndex]["stopId"] as Number;
+                        lastStopValue["stopId"] = stopId;
+                        lastStopValue.remove("stopIndex");
+                        Storage.setValue(Constants.LAST_STOP_INDEX_NAME, lastStopValue as PropertyValueType);
+                    } else {
+                        Storage.deleteValue(Constants.LAST_STOP_INDEX_NAME);
+                    }
                 }
 
-                Utils.log("Got last stop index: " + stopIndex + ", expires " + (resetTime == null ? "never" : Utils.dateToIsoString(resetTime)));
-
-                return stopIndex;
+                return stopId;
             } else {
                 Utils.log("Last stop index expired at " + Utils.dateToIsoString(resetTime));
             }
         }
 
-        return 0;
+        return null;
+    }
+
+    (:nearby)
+    static function setNearbyStops(stops as Array, fixTime as Number) as Void {
+        try {
+            Storage.setValue("nearby:last", {"stops" => stops, "at" => fixTime} as PropertyValueType);
+        } catch (e) {
+            Utils.log("Unable to persist nearby result.");
+        }
     }
 }
