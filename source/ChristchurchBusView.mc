@@ -7,6 +7,11 @@ import Toybox.Time.Gregorian;
 
 class ChristchurchBusView extends BaseChristchurchBusView {
     var data as Dictionary<String, String or Array> = {} as Dictionary<String, String or Array>;
+    private var fittedRows as Array = [];
+    private var fittedSecond as Number = -1;
+    private var fittedWidth as Number = -1;
+    private var fittedHeight as Number = -1;
+    private var measurementDc as Dc?;
         
     function initialize(data as Dictionary<String, String or Array>, displayName as String, dataIsStale as Boolean) {
         BaseChristchurchBusView.initialize(displayName, dataIsStale);
@@ -28,42 +33,55 @@ class ChristchurchBusView extends BaseChristchurchBusView {
             nameColumnX = nameColumnXBottom;
         }
 
-        var columnsX = [
-            nameColumnX,
-        ] as Array<Number>;
+        var now = Time.now();
+        var second = now.value();
+        if (second != fittedSecond || screenWidth != fittedWidth || screenHeight != fittedHeight) {
+            fittedRows = [];
+            fittedSecond = second;
+            fittedWidth = screenWidth;
+            fittedHeight = screenHeight;
+            measurementDc = dc;
+            var index = 0;
+            var lineCount = 0;
+            var rowY = cursorY;
+            var visitsToFit = data["MonitoredStopVisit"] as Array<Dictionary>?;
+            if (visitsToFit != null) {
+                while (lineCount < Constants.LINES_TO_SHOW && index < visitsToFit.size()) {
+                    var visitToFit = visitsToFit[index];
+                    var departure = Utils.parseIsoDate(visitToFit["ExpectedDepartureTime"] as String);
+                    if (departure != null) {
+                        var difference = departure.compare(now);
+                        if (difference >= 0) {
+                            var wait = (difference / 60).format("%02d") + ":" + (difference % 60).format("%02d");
+                            var rightX = calculateViewPortBoundaryX(rowY, lineHeight, screenWidth, screenHeight, true);
+                            var available = rightX - nameColumnX - Constants.HORIZONTAL_SPACE;
+                            var fitted = DepartureRowFit.fit(wait, visitToFit["PublishedLineName"] as String,
+                                visitToFit["DestinationName"] as String, available, method(:measureRow));
+                            fittedRows.add([fitted[0], fitted[1], visitToFit["VehicleAtStop"]]);
+                            rowY += lineHeight + Constants.VERTICAL_SPACE;
+                            lineCount++;
+                        }
+                    }
+                    index++;
+                }
+            }
+            measurementDc = null;
+        }
 
-        var index = 0;
         var lineCount = 0;
         var visits = data["MonitoredStopVisit"] as Array<Dictionary>?;
         if (visits != null) {
-            while (lineCount < Constants.LINES_TO_SHOW && index < visits.size()) {
-                var visit = visits[index];
-
-                var expectedDepartureTimeString = visit["ExpectedDepartureTime"] as String;
-                var expectedDepartureTime = Utils.parseIsoDate(expectedDepartureTimeString);
-                if (expectedDepartureTime != null) {
-                    var timeDifference = expectedDepartureTime.compare(Time.now());
-                    if (timeDifference >= 0) {
-                        var waitTime = (timeDifference / 60).format("%02d") + ":" + (timeDifference % 60).format("%02d");
-
-                        var busAtStop = visit["VehicleAtStop"] as Boolean;
-                        var lineName = visit["PublishedLineName"] as String;
-                        var destinationName = visit["DestinationName"] as String;
-
-                        if (busAtStop) {
-                            dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_WHITE);
-                        } else {
-                            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
-                        }
-                        dc.drawText(columnsX[0], cursorY, Graphics.FONT_SYSTEM_TINY, waitTime + ": " + lineName + " (" + destinationName + ")", Graphics.TEXT_JUSTIFY_LEFT);
-
-                        cursorY += lineHeight + Constants.VERTICAL_SPACE;
-
-                        lineCount++;
-                    }
+            while (lineCount < fittedRows.size()) {
+                var row = fittedRows[lineCount] as Array;
+                if (row[2] as Boolean) {
+                    dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_WHITE);
+                } else {
+                    dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
                 }
-
-                index++;
+                dc.drawText(nameColumnX, cursorY, row[1] as Graphics.FontType,
+                            row[0] as String, Graphics.TEXT_JUSTIFY_LEFT);
+                cursorY += lineHeight + Constants.VERTICAL_SPACE;
+                lineCount++;
             }
         } else {
             var errorMessage = "";
@@ -97,8 +115,12 @@ class ChristchurchBusView extends BaseChristchurchBusView {
             }
 
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
-            dc.drawText(columnsX[0], cursorY, Graphics.FONT_SYSTEM_TINY, errorMessage, Graphics.TEXT_JUSTIFY_LEFT);
+            dc.drawText(nameColumnX, cursorY, Graphics.FONT_SYSTEM_TINY, errorMessage, Graphics.TEXT_JUSTIFY_LEFT);
         }
+    }
+
+    private function measureRow(font as Graphics.FontType, text as String) as Number {
+        return (measurementDc as Dc).getTextWidthInPixels(text, font);
     }
 
    (:roundScreen)
@@ -109,7 +131,10 @@ class ChristchurchBusView extends BaseChristchurchBusView {
         if (y > circleOriginY) {
             y += fontHeight;
         }
-        var normalisedY = 1.0f * (circleOriginY - y) / circleOriginY;     
+        // Keep the chord calculation defined if the last row falls beyond the circle.
+        if (y < 0) { y = 0; }
+        if (y > screenHeight) { y = screenHeight; }
+        var normalisedY = 1.0f * (circleOriginY - y) / circleOriginY;
         var angle = Math.asin(normalisedY);
         if (rightSide) {
             angle += Math.PI;
