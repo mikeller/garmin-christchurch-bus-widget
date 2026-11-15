@@ -86,12 +86,23 @@ class ChristchurchBusViewManager {
 
     private function showEmptyState(title as String, hint as String?) as Void {
         if (pages.size() == 0) {
-            currentView = new BaseChristchurchBusView(title, false, hint, null);
+            currentView = newEmptyState(title, hint);
             switchView();
         } else {
             Utils.log(title + (hint == null ? "" : ": " + hint));
             displayBusesForCurrentStop();
         }
+    }
+
+    (:nearby)
+    private function newEmptyState(title as String, hint as String?) as WatchUi.View {
+        return new NearbyStatusView(title, hint);
+    }
+
+    (:noNearby)
+    private function newEmptyState(title as String, hint as String?) as WatchUi.View {
+        // Excluded devices keep their original No stops! page and layout.
+        return new BaseChristchurchBusView(title, false, hint, null);
     }
 
     (:nearby)
