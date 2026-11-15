@@ -13,6 +13,9 @@
     <setting propertyKey="@Properties.customUrl" title="@Strings.CustomUrlTitle">
         <settingConfig type="url"/>
     </setting>
+    <setting propertyKey="@Properties.customTilesUrl" title="@Strings.CustomTilesUrlTitle">
+        <settingConfig type="url"/>
+    </setting>
     <setting propertyKey="@Properties.nearbyEnabled" title="@Strings.NearbyEnabledTitle">
         <settingConfig type="boolean"/>
     </setting>

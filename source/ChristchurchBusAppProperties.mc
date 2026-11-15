@@ -89,6 +89,12 @@ class ChristchurchBusAppProperties {
         return customUrl;
     }
 
+    (:nearby)
+    static function getCustomTilesUrl() as String? {
+        var url = Properties.getValue("customTilesUrl") as String?;
+        return url == null || "".equals(url) ? null : url;
+    }
+
     static function nearbyEnabled() as Boolean {
         return NearbyAvailability.enabled();
     }

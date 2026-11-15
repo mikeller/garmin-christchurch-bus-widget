@@ -73,9 +73,19 @@ class ChristchurchBusDataReader {
         };
 
         if (System.getDeviceSettings().connectionAvailable) {
+            if (!NearbyRequestSlots.acquire()) {
+                concurrentRequestCount--;
+                return false;
+            }
             requestIsRunning[handle] = true;
-
-            Communications.makeWebRequest(baseUrl + DATA_PATH, params, options, method(:onReceiveData));
+            try {
+                Communications.makeWebRequest(baseUrl + DATA_PATH, params, options, method(:onReceiveData));
+            } catch (e) {
+                NearbyRequestSlots.release();
+                requestIsRunning[handle] = false;
+                concurrentRequestCount--;
+                throw e;
+            }
 
             Utils.log("Sent request for handle: " + handle + ", " + stopId);
         } else {
@@ -198,6 +208,7 @@ class ChristchurchBusDataReader {
 
         requestIsRunning[handle] = false;
         concurrentRequestCount--;
+        NearbyRequestSlots.release();
     }
 
     private function showStaleData(stopId as Number, handle as Number, requestIsCompleted as Boolean, callback as Method(data as Dictionary<String, String or Array>?, handle as Number, requestIsCompleted as Boolean, dataIsStale as Boolean) as Void) as Void {

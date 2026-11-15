@@ -10,6 +10,7 @@
     <string id="StopResetTimeMinTitle">Time to remember the last stop [minutes], -1 for 'until changed'</string>
     <string id="StopResetTimeMinRangeError">Time must be between 0 and 1440 minutes, or -1 for 'until changed'.</string>
     <string id="CustomUrlTitle">Custom Server URL</string>
+    <string id="CustomTilesUrlTitle">Custom stop tiles URL (blank: default)</string>
     <string id="NearbyEnabledTitle">Show nearby stops</string>
     <string id="FavouritesBeforeNearbyTitle">Number of favourites before other nearby stops (0: nearby first)</string>
     <string id="FavouritesBeforeNearbyRangeError">Choose 0 to 16 favourites.</string>
