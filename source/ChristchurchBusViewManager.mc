@@ -328,7 +328,12 @@ class ChristchurchBusViewManager {
         var name = stop["displayName"] as String?;
         currentPageTitle = name == null || name == "" ? id.toString() : name as String;
         currentDistance = distanceForStop(stop);
-        currentView = new BaseChristchurchBusView(currentPageTitle, false, codeSubtitle(stop), currentDistance);
+        var view = new BaseChristchurchBusView(currentPageTitle, false, codeSubtitle(stop),
+            pageDistanceSuffix(stop));
+        if (isNearbyPage(stop)) {
+            view.setNearbyPage();
+        }
+        currentView = view;
         switchView();
         refreshBusStopCache(currentStopIndex);
     }
@@ -343,9 +348,29 @@ class ChristchurchBusViewManager {
         return null;
     }
 
+    (:noNearby)
+    private function pageDistanceSuffix(stop as Dictionary) as String? {
+        return null;
+    }
+
+    (:nearby)
+    private function pageDistanceSuffix(stop as Dictionary) as String? {
+        return isNearbyPage(stop) || currentDistance == null ? null : " " + (currentDistance as String);
+    }
+
+    (:noNearby)
+    private function isNearbyPage(stop as Dictionary) as Boolean {
+        return false;
+    }
+
+    (:nearby)
+    private function isNearbyPage(stop as Dictionary) as Boolean {
+        return stop["nearby"] == true || (stop["metres"] != null && currentDistance != null);
+    }
+
     (:nearby)
     private function codeSubtitle(stop as Dictionary) as String? {
-        return stop["nearby"] == true ? (stop["stopId"] as Number).toString() : nearbyStatus;
+        return isNearbyPage(stop) ? currentDistance : nearbyStatus;
     }
 
     (:nearby)
@@ -354,7 +379,7 @@ class ChristchurchBusViewManager {
         if (metres == null || fixAt == 0 || Time.now().value() - fixAt > 300) {
             return null;
         }
-        return " " + NearbyPageNames.distance(metres as Number);
+        return NearbyPageNames.distance(metres as Number);
     }
 
     private function refreshBusStopCache(startIndex as Number) as Void {
@@ -406,11 +431,23 @@ class ChristchurchBusViewManager {
     function onBusDataReady(data as Dictionary<String, String or Array>?, handle as Number,
                              requestIsCompleted as Boolean, dataIsStale as Boolean) as Void {
         if (pages.size() > 0 && handle == pages[currentStopIndex]["stopId"]) {
-            var subtitle = codeSubtitle(pages[currentStopIndex]);
-            currentView = data == null ?
-                new BaseChristchurchBusView(currentPageTitle, dataIsStale, subtitle, currentDistance) :
-                new ChristchurchBusView(data as Dictionary<String, String or Array>,
-                    currentPageTitle, dataIsStale, subtitle, currentDistance);
+            var stop = pages[currentStopIndex];
+            var subtitle = codeSubtitle(stop);
+            var suffix = pageDistanceSuffix(stop);
+            if (data == null) {
+                var base = new BaseChristchurchBusView(currentPageTitle, dataIsStale, subtitle, suffix);
+                if (isNearbyPage(stop)) {
+                    base.setNearbyPage();
+                }
+                currentView = base;
+            } else {
+                var departures = new ChristchurchBusView(data as Dictionary<String, String or Array>,
+                    currentPageTitle, dataIsStale, subtitle, suffix);
+                if (isNearbyPage(stop)) {
+                    departures.setNearbyPage();
+                }
+                currentView = departures;
+            }
             switchView();
         }
         if (requestIsCompleted) {

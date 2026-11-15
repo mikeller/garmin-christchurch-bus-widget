@@ -36,6 +36,8 @@ class NearbyPageNames {
         if (metres < 1000) {
             return metres.toString() + " m";
         }
-        return (metres / 1000).toString() + "." + ((metres % 1000) / 100).toString() + " km";
+        // Round to the nearest 100 m, half up. Keep one decimal at 3 km too.
+        var tenths = (metres + 50) / 100;
+        return (tenths / 10).toString() + "." + (tenths % 10).toString() + " km";
     }
 }
