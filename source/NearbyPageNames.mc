@@ -1,5 +1,6 @@
 import Toybox.Lang;
 
+(:nearby)
 class NearbyPageNames {
     static function hasConfiguredName(name as String?) as Boolean {
         return name != null && !"".equals(trimWhitespace(name as String));
@@ -64,19 +65,7 @@ class NearbyPageNames {
     }
 
     static function clean(name as String) as String {
-        var pos = name.find(" near ");
-        if (pos != null) {
-            name = name.substring(0, pos);
-        }
-        pos = name.find("Bus ");
-        if (pos != null) {
-            name = name.substring(0, pos) + name.substring(pos + 4, name.length());
-        }
-        pos = name.find(" (Platform ");
-        if (pos != null) {
-            name = name.substring(0, pos + 2) + name.substring(pos + 11, name.length());
-        }
-        return name;
+        return SharedStopName.clean(name);
     }
 
     (:nearby)

@@ -109,7 +109,7 @@ class ChristchurchBusDataReader {
             var journey = visit["MonitoredVehicleJourney"] as Dictionary<String, String or Number or Boolean or Dictionary>;
             var stopName = (journey["MonitoredCall"] as Dictionary<String, String or Boolean or Dictionary>)["StopPointName"] as String;
             
-            ChristchurchBusAppProperties.setStopNameIfEmpty(stopId, NearbyPageNames.clean(stopName));
+            ChristchurchBusAppProperties.setStopNameIfEmpty(stopId, SharedStopName.clean(stopName));
         }
     }
 
