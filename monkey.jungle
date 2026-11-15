@@ -17,19 +17,21 @@ instinct2s.excludeAnnotations = roundScreen; colourDisplay; nearby
 instinct2x.excludeAnnotations = roundScreen; colourDisplay; nearby
 instinctcrossover.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; nearby
 
-descentg1.resourcePath = $(descentg1.resourcePath); resources-nonearby
-fenix5.resourcePath = $(fenix5.resourcePath); resources-nonearby
-fenix5s.resourcePath = $(fenix5s.resourcePath); resources-nonearby
-fenix6.resourcePath = $(fenix6.resourcePath); resources-nonearby
-fenix6s.resourcePath = $(fenix6s.resourcePath); resources-nonearby
-fenixchronos.resourcePath = $(fenixchronos.resourcePath); resources-nonearby
-fr55.resourcePath = $(fr55.resourcePath); resources-nonearby
-fr645.resourcePath = $(fr645.resourcePath); resources-nonearby
-fr935.resourcePath = $(fr935.resourcePath); resources-nonearby
-instinct2.resourcePath = $(instinct2.resourcePath); resources-nonearby
-instinct2s.resourcePath = $(instinct2s.resourcePath); resources-nonearby
-instinct2x.resourcePath = $(instinct2x.resourcePath); resources-nonearby
-instinctcrossover.resourcePath = $(instinctcrossover.resourcePath); resources-nonearby
+# These explicit paths replace, rather than append to, the default resources
+# directory. Nearby settings and properties must not ship on excluded devices.
+descentg1.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+fenix5.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+fenix5s.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+fenix6.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+fenix6s.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+fenixchronos.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+fr55.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+fr645.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+fr935.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+instinct2.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+instinct2s.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+instinct2x.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+instinctcrossover.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
 
 descentmk351mm.resourcePath = $(descentmk351mm.resourcePath); resources-launcher-60x60
 descentmk343mm.resourcePath = $(descentmk343mm.resourcePath); resources-launcher-60x60
