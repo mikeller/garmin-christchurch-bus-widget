@@ -17,11 +17,13 @@ class ChristchurchBusGlanceView extends WatchUi.GlanceView {
     private var nearbyAt as Number?;
     private var nearbyAge as String = "";
     private var secondLineText as String = Constants.NO_INFORMATION_STRING;
+    private var nearbyName as String?;
 
-    function initialize(stop as Dictionary?) {
+    function initialize(stop as Dictionary?, nearbyName as String?) {
         GlanceView.initialize();
 
         self.stop = stop as Dictionary<String, Number or String>?;
+        self.nearbyName = nearbyName;
         if (stop != null) {
             nearbyAt = stop["nearbyAt"] as Number?;
         }
@@ -35,12 +37,9 @@ class ChristchurchBusGlanceView extends WatchUi.GlanceView {
             if (stop != null) {
                 var stopId = stop["stopId"] as Number;
 
-                var displayName = stop["displayName"] as String;
-                if ("".equals(displayName)) {
-                    glanceTitle = "" + stopId;
-                } else {
-                    glanceTitle = displayName;
-                }
+                glanceTitle = NearbyGlanceTitle.title(stop["displayName"] as String?,
+                    nearbyName, stopId,
+                    WatchUi.loadResource(Rez.Strings.StopCodeFallback) as String);
 
                 var cache = null;
                 try {

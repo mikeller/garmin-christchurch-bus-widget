@@ -20,7 +20,7 @@
     <string id="LoadingNearbyStops">Loading nearby stops...</string>
     <string id="NearbyUnavailable">Nearby unavailable</string>
     <string id="NoStopsNearby">No stops nearby</string>
-    <string id="StopCodeFallback">Stop $1$</string>
+    <string id="StopCodeFallback" scope="glance">Stop $1$</string>
     <string id="NearbyLocationHint">Check location; reopen outdoors</string>
     <string id="NearbyTileHint">Check connection; retry</string>
     <string id="ConfigureStopsHint">Configure stops in settings</string>

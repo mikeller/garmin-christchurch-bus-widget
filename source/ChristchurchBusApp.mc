@@ -30,10 +30,19 @@ class ChristchurchBusApp extends Application.AppBase {
         if (!found && lastId != null && ChristchurchBusAppProperties.nearbyEnabled()) {
             var nearby = lastNearbyGlanceStop(lastId as Number);
             if (nearby != null) {
-                return [new ChristchurchBusGlanceView(nearby)] as [GlanceView];
+                return [new ChristchurchBusGlanceView(nearby, null)] as [GlanceView];
             }
         }
-        return [new ChristchurchBusGlanceView(stops.size() > 0 ? stops[stopIndex] : null)] as [GlanceView];
+        var favourite = stops.size() > 0 ? stops[stopIndex] : null;
+        var nearbyName = null as String?;
+        if (favourite != null && ChristchurchBusAppProperties.nearbyEnabled() &&
+            NearbyGlanceTitle.isBlank(favourite["displayName"] as String?)) {
+            var cached = lastNearbyGlanceStop(favourite["stopId"] as Number);
+            if (cached != null) {
+                nearbyName = cached["displayName"] as String?;
+            }
+        }
+        return [new ChristchurchBusGlanceView(favourite, nearbyName)] as [GlanceView];
     }
 
     (:nearby, :glance)
