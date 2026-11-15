@@ -4,18 +4,15 @@ import Toybox.Graphics;
 import Toybox.WatchUi;
 import Toybox.Time;
 import Toybox.Time.Gregorian;
-import Toybox.System;
 
 class ChristchurchBusView extends BaseChristchurchBusView {
     var data as Dictionary<String, String or Array> = {} as Dictionary<String, String or Array>;
-    private var fittedRows as Array = [];
-    private var fittedSecond as Number = -1;
-    private var fittedWidth as Number = -1;
-    private var fittedHeight as Number = -1;
-    private var fittedVisits as Array?;
-    private var fittedVisitCount as Number = -1;
-    // Temporary, one-row diagnostics for the simulator's first data draw.
-    private var fitDiagnosticPending as Boolean = true;
+    // One bounded entry shared across view instances (a cache hit recreates the view).
+    private static var fittedRows as Array = [];
+    private static var fittedSecond as Number = -1;
+    private static var fittedWidth as Number = -1;
+    private static var fittedHeight as Number = -1;
+    private static var fittedVisits as Array?;
         
     function initialize(data as Dictionary<String, String or Array>, displayName as String, dataIsStale as Boolean) {
         BaseChristchurchBusView.initialize(displayName, dataIsStale);
@@ -40,15 +37,16 @@ class ChristchurchBusView extends BaseChristchurchBusView {
         var now = Time.now();
         var second = now.value();
         var visitsToFit = data["MonitoredStopVisit"] as Array<Dictionary>?;
-        if (second != fittedSecond || screenWidth != fittedWidth || screenHeight != fittedHeight ||
-            visitsToFit != fittedVisits ||
-            (visitsToFit != null && visitsToFit.size() != fittedVisitCount)) {
+        // The displayed countdown includes seconds. A new second changes the row
+        // text and must refit; a redraw within that second reuses the measured rows.
+        if (second != fittedSecond ||
+            !DepartureRowsKey.same(visitsToFit, fittedVisits, screenWidth, fittedWidth,
+                                   screenHeight, fittedHeight)) {
             fittedRows = [];
             fittedSecond = second;
             fittedWidth = screenWidth;
             fittedHeight = screenHeight;
             fittedVisits = visitsToFit;
-            fittedVisitCount = visitsToFit != null ? visitsToFit.size() : -1;
             var index = 0;
             var lineCount = 0;
             var rowY = cursorY;
@@ -68,15 +66,7 @@ class ChristchurchBusView extends BaseChristchurchBusView {
                             }
                             var route = visitToFit["PublishedLineName"] as String?;
                             var destination = visitToFit["DestinationName"] as String?;
-                            if (fitDiagnosticPending) {
-                                System.println("Row fit start: width=" + available + " route?=" + (route != null) +
-                                    " destination?=" + (destination != null));
-                            }
                             var fitted = DepartureRowFit.fit(wait, route, destination, available, dc);
-                            if (fitDiagnosticPending) {
-                                System.println("Row fit completed");
-                                fitDiagnosticPending = false;
-                            }
                             fittedRows.add([fitted[0], fitted[1], visitToFit["VehicleAtStop"] == true]);
                             rowY += lineHeight + Constants.VERTICAL_SPACE;
                             lineCount++;
