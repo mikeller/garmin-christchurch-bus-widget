@@ -14,7 +14,6 @@ class ChristchurchBusView extends BaseChristchurchBusView {
     private var fittedHeight as Number = -1;
     private var fittedVisits as Array?;
     private var fittedVisitCount as Number = -1;
-    private var measurementDc as Dc?;
     // Temporary, one-row diagnostics for the simulator's first data draw.
     private var fitDiagnosticPending as Boolean = true;
         
@@ -50,7 +49,6 @@ class ChristchurchBusView extends BaseChristchurchBusView {
             fittedHeight = screenHeight;
             fittedVisits = visitsToFit;
             fittedVisitCount = visitsToFit != null ? visitsToFit.size() : -1;
-            measurementDc = dc;
             var index = 0;
             var lineCount = 0;
             var rowY = cursorY;
@@ -74,7 +72,7 @@ class ChristchurchBusView extends BaseChristchurchBusView {
                                 System.println("Row fit start: width=" + available + " route?=" + (route != null) +
                                     " destination?=" + (destination != null));
                             }
-                            var fitted = DepartureRowFit.fit(wait, route, destination, available, method(:measureRow));
+                            var fitted = DepartureRowFit.fit(wait, route, destination, available, dc);
                             if (fitDiagnosticPending) {
                                 System.println("Row fit completed");
                                 fitDiagnosticPending = false;
@@ -87,7 +85,6 @@ class ChristchurchBusView extends BaseChristchurchBusView {
                     index++;
                 }
             }
-            measurementDc = null;
         }
 
         var lineCount = 0;
@@ -139,17 +136,6 @@ class ChristchurchBusView extends BaseChristchurchBusView {
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
             dc.drawText(nameColumnX, cursorY, Graphics.FONT_SYSTEM_TINY, errorMessage, Graphics.TEXT_JUSTIFY_LEFT);
         }
-    }
-
-    private function measureRow(font as Graphics.FontType, text as String) as Number {
-        if (fitDiagnosticPending) {
-            System.println("Row measure start: font=" + font + " length=" + text.length());
-        }
-        var measured = (measurementDc as Dc).getTextWidthInPixels(text, font);
-        if (fitDiagnosticPending) {
-            System.println("Row measure completed: width=" + measured);
-        }
-        return measured;
     }
 
    (:roundScreen)
