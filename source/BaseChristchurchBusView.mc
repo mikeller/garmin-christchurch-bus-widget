@@ -35,45 +35,53 @@ class BaseChristchurchBusView extends WatchUi.View {
 
     function onLayout(dc as Dc) as Void {
         if (nearbyPage) {
-            // One-line titles sit nearer the broad middle of a round screen.
-            // Two-line titles start higher to preserve room for departures.
             nearbyStartY = dc.getHeight() / 4;
             var fonts = NearbyPageTitle.fonts();
             nearbyTitleLines = [];
-            // Prefer a single line, even at a smaller system-font size, over
-            // a visually awkward break in a short name such as "Hereford St".
+            // Prefer fewer lines, then a larger font. All width measurements
+            // use the chosen font and the chord at the actual baseline.
             for (var i = 0; i < fonts.size(); i++) {
                 nearbyFont = fonts[i] as Graphics.FontType;
                 var full = NearbyPageTitle.text(siteName, distanceSuffix);
                 if (dc.getTextWidthInPixels(full, nearbyFont) <=
-                    nearbyWidthAt(dc, nearbyStartY)) {
+                    nearbyLineWidth(dc, nearbyStartY, dc.getFontHeight(nearbyFont))) {
                     nearbyTitleLines = [full];
                     break;
                 }
             }
-            if (nearbyTitleLines.size() == 0) {
+            for (var count = 2; count <= 3 && nearbyTitleLines.size() == 0; count++) {
                 nearbyStartY = dc.getHeight() / 6;
-            }
-            for (var i = 0; nearbyTitleLines.size() == 0 && i < fonts.size(); i++) {
-                nearbyFont = fonts[i] as Graphics.FontType;
-                var height = dc.getFontHeight(nearbyFont) + Constants.VERTICAL_SPACE;
-                var firstWidth = nearbyWidthAt(dc, nearbyStartY);
-                var secondWidth = nearbyWidthAt(dc, nearbyStartY + height);
-                var wrapped = NearbyPageTitle.fitDc(siteName, distanceSuffix,
-                    firstWidth, secondWidth, dc, nearbyFont);
-                if (wrapped != null &&
-                    (wrapped as Array).size() * dc.getFontHeight(nearbyFont) <= dc.getHeight() / 4) {
-                    nearbyTitleLines = wrapped as Array<String>;
-                    break;
+                for (var i = 0; i < fonts.size(); i++) {
+                    nearbyFont = fonts[i] as Graphics.FontType;
+                    var height = dc.getFontHeight(nearbyFont) + Constants.VERTICAL_SPACE;
+                    var widths = [] as Array<Number>;
+                    for (var n = 0; n < count; n++) {
+                        widths.add(nearbyLineWidth(dc, nearbyStartY + n * height,
+                            dc.getFontHeight(nearbyFont)));
+                    }
+                    if (!nearbyRowsFit(dc, nearbyStartY, count, height)) {
+                        continue;
+                    }
+                    var wrapped = NearbyPageTitle.fitDc(siteName, distanceSuffix,
+                        widths, dc, nearbyFont);
+                    if (wrapped != null && (wrapped as Array).size() == count) {
+                        nearbyTitleLines = wrapped as Array<String>;
+                        break;
+                    }
                 }
             }
             if (nearbyTitleLines.size() == 0) {
-                nearbyFont = Graphics.FONT_SYSTEM_SMALL;
-                var firstWidth = nearbyWidthAt(dc, nearbyStartY);
-                var secondWidth = nearbyWidthAt(dc, nearbyStartY +
-                    dc.getFontHeight(nearbyFont) + Constants.VERTICAL_SPACE);
+                nearbyFont = fonts[fonts.size() - 1] as Graphics.FontType;
+                var height = dc.getFontHeight(nearbyFont) + Constants.VERTICAL_SPACE;
+                var count = nearbyRowsFit(dc, dc.getHeight() / 6, 3, height) ? 3 : 2;
+                nearbyStartY = dc.getHeight() / 6;
+                var widths = [] as Array<Number>;
+                for (var n = 0; n < count; n++) {
+                    widths.add(nearbyLineWidth(dc, nearbyStartY + n * height,
+                        dc.getFontHeight(nearbyFont)));
+                }
                 var truncated = NearbyPageTitle.truncateDc(siteName, distanceSuffix,
-                    firstWidth, secondWidth, dc, nearbyFont);
+                    widths, dc, nearbyFont);
                 nearbyTitleLines = truncated == null ? [NearbyPageTitle.text("", distanceSuffix)] :
                     truncated as Array<String>;
             }
@@ -90,6 +98,23 @@ class BaseChristchurchBusView extends WatchUi.View {
             }
             titleToDraw = name + suffix;
         }
+    }
+
+    private function nearbyRowsFit(dc as Dc, start as Number, lines as Number,
+                                   titleLineHeight as Number) as Boolean {
+        var rowsStart = start + lines * titleLineHeight +
+            Constants.LINE_WIDTH + Constants.VERTICAL_SPACE;
+        var rowHeight = dc.getFontHeight(Graphics.FONT_SYSTEM_TINY) + Constants.VERTICAL_SPACE;
+        var bottom = rowsStart + 2 * rowHeight;
+        return NearbyPageTitle.rowsFit(start, lines, titleLineHeight,
+            Constants.LINE_WIDTH + Constants.VERTICAL_SPACE, rowHeight,
+            dc.getHeight(), nearbyWidthAt(dc, bottom));
+    }
+
+    private function nearbyLineWidth(dc as Dc, y as Number, fontHeight as Number) as Number {
+        var top = nearbyWidthAt(dc, y);
+        var bottom = nearbyWidthAt(dc, y + fontHeight);
+        return top < bottom ? top : bottom;
     }
 
     function onUpdate(dc as Dc) as Void {

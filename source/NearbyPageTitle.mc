@@ -1,45 +1,39 @@
 import Toybox.Lang;
 import Toybox.Graphics;
 
-// Title layout is computed once in onLayout, never while drawing departure
-// rows. The parenthesised distance is an indivisible suffix.
+// Layout work is done in onLayout, not while drawing departure rows.
 class NearbyPageTitle {
-    // The favourite header draws with FONT_SYSTEM_SMALL. On Descent Mk1 the
-    // smaller system fonts visibly have a different weight, and there is no
-    // custom font or API-level 3 vector-font weight selection. Preserve the
-    // same bold face on both lines; truncate the name rather than the distance
-    // if this one font cannot fit the title in two lines.
+    static function rowsFit(start as Number, lines as Number, titleLineHeight as Number,
+                            separatorHeight as Number, rowHeight as Number, screenHeight as Number,
+                            bottomWidth as Number) as Boolean {
+        var bottom = start + lines * titleLineHeight +
+            separatorHeight + 2 * rowHeight;
+        return bottom <= screenHeight - 5 && bottomWidth >= 80;
+    }
+
     static function fonts() as Array<Graphics.FontType> {
-        return [Graphics.FONT_SYSTEM_SMALL];
+        return [Graphics.FONT_SYSTEM_SMALL, Graphics.FONT_SYSTEM_TINY,
+                Graphics.FONT_SYSTEM_XTINY];
     }
 
     static function text(name as String, distance as String?) as String {
         return distance == null ? name : name + " (" + (distance as String) + ")";
     }
 
-    // Injectable width measurement for the pure layout tests.
+    // Kept as a duck-typed width-measurer interface for tests.
     static function fit(name as String, distance as String?, firstWidth as Number,
                         secondWidth as Number, measure) as Array<String>? {
-        return fitMeasured(name, distance, firstWidth, secondWidth, measure, null,
-            Graphics.FONT_XTINY);
+        return fitLines(name, distance, [firstWidth, secondWidth], measure);
     }
 
-    static function fitDc(name as String, distance as String?, firstWidth as Number,
-                          secondWidth as Number, dc as Dc,
-                          font as Graphics.FontType) as Array<String>? {
-        return fitMeasured(name, distance, firstWidth, secondWidth, null, dc, font);
+    static function fitLines(name as String, distance as String?,
+                             widths as Array<Number>, measure) as Array<String>? {
+        return fitMeasured(name, distance, widths, measure, null, Graphics.FONT_SYSTEM_SMALL);
     }
 
-    static function truncate(name as String, distance as String?, firstWidth as Number,
-                             secondWidth as Number, measure) as Array<String>? {
-        return truncateMeasured(name, distance, firstWidth, secondWidth, measure, null,
-            Graphics.FONT_XTINY);
-    }
-
-    static function truncateDc(name as String, distance as String?, firstWidth as Number,
-                               secondWidth as Number, dc as Dc,
-                               font as Graphics.FontType) as Array<String>? {
-        return truncateMeasured(name, distance, firstWidth, secondWidth, null, dc, font);
+    static function fitDc(name as String, distance as String?, widths as Array<Number>,
+                          dc as Dc, font as Graphics.FontType) as Array<String>? {
+        return fitMeasured(name, distance, widths, null, dc, font);
     }
 
     private static function width(text as String, measure, dc as Dc?,
@@ -48,82 +42,188 @@ class NearbyPageTitle {
             measure.width(text) as Number;
     }
 
-    private static function fitMeasured(name as String, distance as String?,
-                                        firstWidth as Number, secondWidth as Number,
-                                        measure, dc as Dc?,
-                                        font as Graphics.FontType) as Array<String>? {
-        var full = text(name, distance);
-        if (width(full, measure, dc, font) <= firstWidth) {
-            return [full];
-        }
-        var suffix = distance == null ? "" : " (" + (distance as String) + ")";
-        // The separator belongs only to a line that also contains name text.
-        // A distance alone on the last line has no leading space.
-        var distanceOnly = distance == null ? "" : "(" + (distance as String) + ")";
-        if (width(distanceOnly, measure, dc, font) > secondWidth) {
-            return null;
-        }
-        if (distance != null && width(name, measure, dc, font) <= firstWidth) {
-            return [name, distanceOnly];
-        }
-        // Try complete words first. A break before the suffix preserves its
-        // spelling even if the name contains long unbroken GTFS tokens.
-        var best = null as Array<String>?;
-        var bestBalance = 2147483647;
-        for (var i = 0; i < name.length(); i++) {
-            if (!" ".equals(name.substring(i, i + 1))) {
+    // A slash is attached to the preceding word so a break may only follow it.
+    // The distance is one word and cannot be split.
+    private static function words(name as String, distance as String?) as Array<String> {
+        var displayed = slashName(name);
+        var raw = displayed.split(" ", null);
+        var result = [] as Array<String>;
+        for (var i = 0; i < raw.size(); i++) {
+            var word = raw[i] as String;
+            if ("".equals(word)) {
                 continue;
             }
-            var first = name.substring(0, i) as String;
-            var second = (name.substring(i + 1, name.length()) as String) + suffix;
-            var left = width(first, measure, dc, font);
-            var right = width(second, measure, dc, font);
-            if (left <= firstWidth && right <= secondWidth) {
-                var balance = left > right ? left - right : right - left;
-                if (orphanedShortWord(first, name.substring(i + 1, name.length()) as String)) {
-                    balance += 10000;
-                }
-                if (balance < bestBalance) {
-                    best = [first, second];
-                    bestBalance = balance;
-                }
+            if ("/".equals(word) && result.size() > 0) {
+                var last = result.size() - 1;
+                result[last] = result[last] + " /";
+            } else {
+                result.add(word);
             }
         }
-        if (best != null) {
-            return best;
+        if (distance != null) {
+            result.add("(" + (distance as String) + ")");
         }
-        return null;
+        return result;
     }
 
-    private static function orphanedShortWord(first as String, secondName as String) as Boolean {
-        var last = 0;
-        for (var i = 0; i < first.length(); i++) {
-            if (" ".equals(first.substring(i, i + 1))) {
-                last = i + 1;
+    private static function slashName(name as String) as String {
+        var at = name.find(" near ");
+        while (at != null) {
+            name = name.substring(0, at) + " / " +
+                name.substring((at as Number) + 6, name.length());
+            at = name.find(" near ");
+        }
+        return name;
+    }
+
+    private static function line(words as Array<String>, start as Number,
+                                 end as Number) as String {
+        var result = words[start];
+        for (var i = start + 1; i < end; i++) {
+            result += " " + words[i];
+        }
+        return result;
+    }
+
+    private static function allowedBreak(words as Array<String>, at as Number) as Boolean {
+        if (at <= 0 || at >= words.size()) {
+            return false;
+        }
+        if ((words[at] as String).substring(0, 1).equals("(")) {
+            return true;
+        }
+        // Do not separate a street suffix from its street. A trailing slash
+        // belongs with the street name and is the preferred break position.
+        if (("St".equals(words[at]) || "Rd".equals(words[at])) ||
+            ("St".equals(words[at - 1]) || "Rd".equals(words[at - 1]))) {
+            return false;
+        }
+        return true;
+    }
+
+    private static function fitMeasured(name as String, distance as String?,
+                                        widths as Array<Number>, measure, dc as Dc?,
+                                        font as Graphics.FontType) as Array<String>? {
+        if (widths.size() == 0 || widths.size() > 3) {
+            return null;
+        }
+        var full = text(name, distance);
+        if (widths.size() == 1) {
+            return width(full, measure, dc, font) <= widths[0] ? [full] : null;
+        }
+        var parts = words(name, distance);
+        var best = null as Array<String>?;
+        var bestScore = 2147483647;
+        for (var a = 1; a < parts.size(); a++) {
+            if (!allowedBreak(parts, a)) {
+                continue;
+            }
+            var first = line(parts, 0, a);
+            var firstWidth = width(first, measure, dc, font);
+            if (firstWidth > widths[0]) {
+                continue;
+            }
+            if (widths.size() == 2) {
+                var second = line(parts, a, parts.size());
+                var secondWidth = width(second, measure, dc, font);
+                if (secondWidth <= widths[1]) {
+                    var score = firstWidth > secondWidth ?
+                        firstWidth - secondWidth : secondWidth - firstWidth;
+                    if (score < bestScore) {
+                        best = [first, second];
+                        bestScore = score;
+                    }
+                }
+            } else {
+                for (var b = a + 1; b < parts.size(); b++) {
+                    if (!allowedBreak(parts, b)) {
+                        continue;
+                    }
+                    var middle = line(parts, a, b);
+                    var last = line(parts, b, parts.size());
+                    var middleWidth = width(middle, measure, dc, font);
+                    var lastWidth = width(last, measure, dc, font);
+                    if (middleWidth <= widths[1] && lastWidth <= widths[2]) {
+                        var largest = firstWidth > middleWidth ? firstWidth : middleWidth;
+                        largest = largest > lastWidth ? largest : lastWidth;
+                        var smallest = firstWidth < middleWidth ? firstWidth : middleWidth;
+                        smallest = smallest < lastWidth ? smallest : lastWidth;
+                        var score = largest - smallest;
+                        if (score < bestScore) {
+                            best = [first, middle, last];
+                            bestScore = score;
+                        }
+                    }
+                }
             }
         }
-        var nextSpace = secondName.find(" ");
-        var firstWordLength = nextSpace == null ? secondName.length() : nextSpace as Number;
-        return (last > 0 && first.length() - last <= 2) || firstWordLength <= 2;
+        return best;
+    }
+
+    // Last resort: reserve a whole line for distance, shorten only the name.
+    static function truncateDc(name as String, distance as String?,
+                               widths as Array<Number>, dc as Dc,
+                               font as Graphics.FontType) as Array<String>? {
+        return truncateMeasured(name, distance, widths, null, dc, font);
+    }
+
+    static function truncate(name as String, distance as String?,
+                             widths as Array<Number>, measure) as Array<String>? {
+        return truncateMeasured(name, distance, widths, measure, null,
+            Graphics.FONT_SYSTEM_SMALL);
     }
 
     private static function truncateMeasured(name as String, distance as String?,
-                                             firstWidth as Number, secondWidth as Number,
-                                             measure, dc as Dc?,
+                                             widths as Array<Number>, measure, dc as Dc?,
                                              font as Graphics.FontType) as Array<String>? {
-        var suffix = distance == null ? "" : "(" + (distance as String) + ")";
-        if (distance != null && width(suffix, measure, dc, font) > secondWidth) {
+        var suffix = distance == null ? null : "(" + (distance as String) + ")";
+        var nameLines = suffix == null ? widths.size() : widths.size() - 1;
+        if (nameLines < 1 || (suffix != null &&
+            width(suffix as String, measure, dc, font) > widths[widths.size() - 1])) {
             return null;
         }
-        var shortened = name;
-        while (shortened.length() > 0 &&
-            width(shortened + "...", measure, dc, font) > firstWidth) {
-            shortened = shortened.substring(0, shortened.length() - 1);
+        var displayed = slashName(name);
+        var result = [] as Array<String>;
+        var remaining = displayed;
+        for (var i = 0; i < nameLines; i++) {
+            var limit = widths[i];
+            if (i + 1 < nameLines) {
+                var cut = remaining.length();
+                while (cut > 0 && width(remaining.substring(0, cut), measure, dc, font) > limit) {
+                    cut--;
+                }
+                var space = null as Number?;
+                for (var j = 0; j < cut; j++) {
+                    if (" ".equals(remaining.substring(j, j + 1))) {
+                        space = j;
+                    }
+                }
+                if (space != null && space > 0) {
+                    cut = space as Number;
+                }
+                if (cut <= 0) {
+                    break;
+                }
+                result.add(remaining.substring(0, cut) as String);
+                remaining = remaining.substring(cut, remaining.length()) as String;
+                while (remaining.length() > 0 && " ".equals(remaining.substring(0, 1))) {
+                    remaining = remaining.substring(1, remaining.length()) as String;
+                }
+            } else {
+                var cut = remaining.length();
+                while (cut > 0 && width(remaining.substring(0, cut) + "...", measure, dc, font) > limit) {
+                    cut--;
+                }
+                if (width(remaining, measure, dc, font) <= limit) {
+                    result.add(remaining);
+                } else if (cut > 0) {
+                    result.add(remaining.substring(0, cut) + "...");
+                }
+            }
         }
-        var first = shortened + "...";
-        if (width(first, measure, dc, font) > firstWidth) {
-            return null;
+        if (suffix != null) {
+            result.add(suffix as String);
         }
-        return distance == null ? [first] : [first, suffix];
+        return result.size() > 0 ? result : null;
     }
 }

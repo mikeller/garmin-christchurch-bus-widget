@@ -10,6 +10,7 @@ class ChristchurchBusViewManager {
     private var behaviourDelegate as WatchUi.BehaviorDelegate;
     private var currentView as WatchUi.View;
     private var currentPageTitle as String = Constants.NO_STOPS_STRING;
+    private var currentTitleFromTile as Boolean = false;
     private var currentDistance as String?;
     private var favourites as Array<Dictionary> = [] as Array<Dictionary>;
     private var pages as Array<Dictionary> = [] as Array<Dictionary>;
@@ -392,13 +393,16 @@ class ChristchurchBusViewManager {
         }
         var id = stop["stopId"] as Number;
         var name = stop["displayName"] as String?;
+        var cachedRows = isNearbyStop(stop) ? null : cachedTitleRows(id);
+        currentTitleFromTile = !isNearbyStop(stop) && cachedRows != null &&
+            !NearbyPageNames.hasConfiguredName(name);
         currentPageTitle = isNearbyStop(stop) ? name as String :
-            NearbyPageNames.favouriteTitle(name, id, cachedTitleRows(id),
+            NearbyPageNames.favouriteTitle(name, id, cachedRows,
                 WatchUi.loadResource(Rez.Strings.StopCodeFallback) as String);
         currentDistance = distanceForStop(stop);
         var view = new BaseChristchurchBusView(currentPageTitle, false, codeSubtitle(stop),
             pageDistanceSuffix(stop));
-        if (isNearbyPage(stop)) {
+        if (isNearbyPage(stop) || currentTitleFromTile) {
             view.setNearbyPage();
         }
         currentView = view;
@@ -552,14 +556,14 @@ class ChristchurchBusViewManager {
             var suffix = pageDistanceSuffix(stop);
             if (data == null) {
                 var base = new BaseChristchurchBusView(currentPageTitle, dataIsStale, subtitle, suffix);
-                if (isNearbyPage(stop)) {
+                if (isNearbyPage(stop) || currentTitleFromTile) {
                     base.setNearbyPage();
                 }
                 currentView = base;
             } else {
                 var departures = new ChristchurchBusView(data as Dictionary<String, String or Array>,
                     currentPageTitle, dataIsStale, subtitle, suffix);
-                if (isNearbyPage(stop)) {
+                if (isNearbyPage(stop) || currentTitleFromTile) {
                     departures.setNearbyPage();
                 }
                 currentView = departures;

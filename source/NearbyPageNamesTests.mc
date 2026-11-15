@@ -46,5 +46,9 @@ function testNearbyNamesAndDistances(logger as Logger) as Boolean {
         NearbyPageNames.favouriteTitle(" \t ", 38197,
             [[38197, -4353000, 17263000, ""]] as Array, fallback),
         "empty tile name also uses fallback");
+    Test.assertMessage(!NearbyPageNames.hasConfiguredName(" \t "),
+        "blank tile-derived favourite uses wrapped title layout");
+    Test.assertMessage(NearbyPageNames.hasConfiguredName(" Hereford St "),
+        "configured favourite keeps its own title layout");
     return true;
 }

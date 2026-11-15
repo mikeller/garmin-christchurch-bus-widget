@@ -1,6 +1,10 @@
 import Toybox.Lang;
 
 class NearbyPageNames {
+    static function hasConfiguredName(name as String?) as Boolean {
+        return name != null && !"".equals(trimWhitespace(name as String));
+    }
+
     // Pure title decision; the glance can reuse this without acquiring a
     // position or modifying the configured favourite name.
     static function favouriteTitle(configured as String?, code as Number,
