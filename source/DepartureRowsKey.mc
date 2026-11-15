@@ -1,12 +1,10 @@
 import Toybox.Lang;
-import Toybox.Graphics;
 
 // Compare the immutable compressed visits by content, not Array identity.
 class DepartureRowsKey {
     static function same(a as Array?, b as Array?, widthA as Number, widthB as Number,
-                         heightA as Number, heightB as Number,
-                         fontA as Graphics.FontType, fontB as Graphics.FontType) as Boolean {
-        if (widthA != widthB || heightA != heightB || fontA != fontB) {
+                         heightA as Number, heightB as Number) as Boolean {
+        if (widthA != widthB || heightA != heightB) {
             return false;
         }
         if (a == null || b == null) {
