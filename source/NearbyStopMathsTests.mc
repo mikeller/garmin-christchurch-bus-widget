@@ -608,6 +608,47 @@ function testNearbyOnlyOrdering(logger as Logger) as Boolean {
 }
 
 (:test, :nearby)
+function testConfiguredNearbyCounts(logger as Logger) as Boolean {
+    Test.assertEqualMessage(5, NearbyStopMaths.NEARBY_COUNT,
+        "tile contract maximum: revisit the 15-stop tile minimum before increasing");
+    var values = [1, 3, 5] as Array<Number>;
+    var expected = ["[3003]", "[3003, 1500, 2000]",
+                    "[3003, 1500, 2000, 3004, 3002]"];
+    var nonFavourite = ["[1500]", "[1500, 2000, 3004]",
+                        "[1500, 2000, 3004, 3002, 3001]"];
+    for (var i = 0; i < values.size(); i++) {
+        var n = values[i];
+        var stops = NearbyStopMathsTestData.vectorStops();
+        Test.assertEqualMessage(expected[i], NearbyStopMathsTestData.codes(
+            NearbyStopMaths.nearest(stops, -4353000, 17263000, n)), "nearest count");
+        var split = NearbyStopMaths.nearestSplit(stops, -4353000, 17263000,
+            [3003] as Array<Number>, n);
+        Test.assertEqualMessage(nonFavourite[i],
+            NearbyStopMathsTestData.codes(split[0] as Array), "non-favourite count");
+        Test.assertEqualMessage("[3003]",
+            NearbyStopMathsTestData.codes(split[1] as Array), "favourite among overall n");
+        var order = NearbyPageOrder.build([3003] as Array<Number>, split[0] as Array,
+            split[1] as Array, 0, NearbyPageOrder.READY);
+        Test.assertEqualMessage(n + 1, order.size(), "configured count plus favourite");
+    }
+    return true;
+}
+
+(:test, :nearby)
+function testNearbyStopsToShowSetting(logger as Logger) as Boolean {
+    Test.assertEqualMessage(3, NearbyAvailability.normaliseStopsToShow(null), "missing");
+    Test.assertEqualMessage(3, NearbyAvailability.normaliseStopsToShow(""), "blank");
+    Test.assertEqualMessage(3, NearbyAvailability.normaliseStopsToShow("4"), "string");
+    Test.assertEqualMessage(3, NearbyAvailability.normaliseStopsToShow(0), "zero");
+    Test.assertEqualMessage(3, NearbyAvailability.normaliseStopsToShow(-1), "negative");
+    Test.assertEqualMessage(3, NearbyAvailability.normaliseStopsToShow(6), "above maximum");
+    for (var n = 1; n <= 5; n++) {
+        Test.assertEqualMessage(n, NearbyAvailability.normaliseStopsToShow(n), "valid setting");
+    }
+    return true;
+}
+
+(:test, :nearby)
 function testFavouritesBeforeNearbySettingFallback(logger as Logger) as Boolean {
     Test.assertEqualMessage(0, NearbyAvailability.normaliseFavouritesBeforeNearby(null), "blank");
     Test.assertEqualMessage(0, NearbyAvailability.normaliseFavouritesBeforeNearby(""), "empty string");

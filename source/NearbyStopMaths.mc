@@ -16,7 +16,8 @@ import Toybox.Math;
 // metres is null when the distance is unknown.
 (:nearby)
 class NearbyStopMaths {
-    // Fixed by the tile contract (its 15-stop minimum per tile depends on it).
+    // Maximum fixed by the tile contract (15 stops per tile was sized for 5).
+    // Raising this limit requires revisiting the tile minimum.
     static const NEARBY_COUNT as Number = 5;
 
     // Indices into a result entry.

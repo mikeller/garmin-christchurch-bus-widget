@@ -12,6 +12,8 @@
     <string id="CustomUrlTitle">Custom Server URL</string>
     <string id="CustomTilesUrlTitle">Custom stop tiles URL (blank: default)</string>
     <string id="NearbyEnabledTitle">Show nearby stops</string>
+    <string id="NearbyStopsToShowTitle">Nearby stops to show</string>
+    <string id="NearbyStopsToShowRangeError">Choose 1 to 5 nearby stops.</string>
     <string id="FavouritesBeforeNearbyTitle">Number of favourites before other nearby stops (0: nearby first)</string>
     <string id="FavouritesBeforeNearbyRangeError">Choose 0 to 16 favourites.</string>
     <string id="Locating">Locating...</string>

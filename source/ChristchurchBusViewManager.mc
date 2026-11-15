@@ -269,7 +269,7 @@ class ChristchurchBusViewManager {
             codes.add(favourites[i]["stopId"] as Number);
         }
         var split = NearbyStopMaths.nearestSplit(stops, tileLat as Number, tileLon as Number,
-            codes, NearbyStopMaths.NEARBY_COUNT);
+            codes, ChristchurchBusAppProperties.nearbyStopsToShow());
         nearbyEntries = split[0] as Array;
         slotState = nearbyEntries.size() == 0 ? NearbyPageOrder.EMPTY : NearbyPageOrder.READY;
         setNearbyStatus(null);

@@ -102,4 +102,9 @@ class ChristchurchBusAppProperties {
     static function favouritesBeforeNearby() as Number {
         return NearbyAvailability.favouritesBeforeNearby();
     }
+
+    (:nearby)
+    static function nearbyStopsToShow() as Number {
+        return NearbyAvailability.stopsToShow();
+    }
 }
