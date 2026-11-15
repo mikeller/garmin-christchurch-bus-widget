@@ -3,6 +3,7 @@ import Toybox.Graphics;
 import Toybox.WatchUi;
 import Toybox.Time;
 import Toybox.Time.Gregorian;
+import Toybox.Math;
 
 class BaseChristchurchBusView extends WatchUi.View {
     protected var siteName as String = "";
@@ -14,6 +15,7 @@ class BaseChristchurchBusView extends WatchUi.View {
     protected var nearbyTitleLines as Array<String> = [] as Array<String>;
     protected var nearbyFont as Graphics.FontType = Graphics.FONT_XTINY;
     protected var nearbyLineHeight as Number = 0;
+    protected var nearbyStartY as Number = 0;
 
     protected var cursorY as Number = 0;
 
@@ -33,15 +35,19 @@ class BaseChristchurchBusView extends WatchUi.View {
 
     function onLayout(dc as Dc) as Void {
         if (nearbyPage) {
-            // Centre the title lower than the normal header, where a round
-            // screen has a substantially wider chord.
-            var width = dc.getWidth() * 70 / 100;
+            // The first title line is near the narrow top of a round screen;
+            // its second line has a different, wider usable chord.
+            nearbyStartY = dc.getHeight() / 6;
             var fonts = [Graphics.FONT_SYSTEM_SMALL, Graphics.FONT_SMALL,
                          Graphics.FONT_TINY, Graphics.FONT_XTINY];
             nearbyTitleLines = [];
             for (var i = 0; i < fonts.size(); i++) {
                 nearbyFont = fonts[i] as Graphics.FontType;
-                var wrapped = NearbyStatusLayout.wrapDc(siteName, width, dc, nearbyFont, 2);
+                var height = dc.getFontHeight(nearbyFont) + Constants.VERTICAL_SPACE;
+                var firstWidth = nearbyWidthAt(dc, nearbyStartY);
+                var secondWidth = nearbyWidthAt(dc, nearbyStartY + height);
+                var wrapped = NearbyPageTitle.fitDc(siteName, distanceSuffix,
+                    firstWidth, secondWidth, dc, nearbyFont);
                 if (wrapped != null &&
                     (wrapped as Array).size() * dc.getFontHeight(nearbyFont) <= dc.getHeight() / 4) {
                     nearbyTitleLines = wrapped as Array<String>;
@@ -50,12 +56,13 @@ class BaseChristchurchBusView extends WatchUi.View {
             }
             if (nearbyTitleLines.size() == 0) {
                 nearbyFont = Graphics.FONT_XTINY;
-                var shortened = siteName;
-                while (shortened.length() > 0 &&
-                    dc.getTextWidthInPixels(shortened + "...", nearbyFont) > width) {
-                    shortened = shortened.substring(0, shortened.length() - 1);
-                }
-                nearbyTitleLines = [shortened + "..."];
+                var firstWidth = nearbyWidthAt(dc, nearbyStartY);
+                var secondWidth = nearbyWidthAt(dc, nearbyStartY +
+                    dc.getFontHeight(nearbyFont) + Constants.VERTICAL_SPACE);
+                var truncated = NearbyPageTitle.truncateDc(siteName, distanceSuffix,
+                    firstWidth, secondWidth, dc, nearbyFont);
+                nearbyTitleLines = truncated == null ? [NearbyPageTitle.text("", distanceSuffix)] :
+                    truncated as Array<String>;
             }
             nearbyLineHeight = dc.getFontHeight(nearbyFont) + Constants.VERTICAL_SPACE;
             return;
@@ -85,7 +92,7 @@ class BaseChristchurchBusView extends WatchUi.View {
         }
 
         if (nearbyPage) {
-            cursorY = screenHeight / 5;
+            cursorY = nearbyStartY;
             for (var i = 0; i < nearbyTitleLines.size(); i++) {
                 dc.drawText(screenWidth / 2, cursorY, nearbyFont, nearbyTitleLines[i],
                     Graphics.TEXT_JUSTIFY_CENTER);
@@ -95,11 +102,6 @@ class BaseChristchurchBusView extends WatchUi.View {
             dc.drawLine(screenWidth * 15 / 100, cursorY,
                 screenWidth * 85 / 100, cursorY);
             cursorY += Constants.LINE_WIDTH + Constants.VERTICAL_SPACE;
-            if (subtitle != null) {
-                dc.drawText(screenWidth / 2, cursorY, Graphics.FONT_SYSTEM_TINY,
-                    subtitle as String, Graphics.TEXT_JUSTIFY_CENTER);
-                cursorY += dc.getFontHeight(Graphics.FONT_SYSTEM_TINY) + Constants.VERTICAL_SPACE;
-            }
             return;
         }
         var titleWidth = getTitleWidth(dc);
@@ -119,6 +121,20 @@ class BaseChristchurchBusView extends WatchUi.View {
     (:roundScreen)
     private function getTitleWidth(dc as Dc) as Number {
         return dc.getWidth();
+    }
+
+    (:roundScreen)
+    private function nearbyWidthAt(dc as Dc, y as Number) as Number {
+        var radius = dc.getWidth() / 2 - 5;
+        var offset = y - dc.getHeight() / 2;
+        var squared = radius * radius - offset * offset;
+        return squared > 0 ? (Math.sqrt(squared.toDouble()) * 2).toNumber() - 8 :
+            dc.getWidth() / 2;
+    }
+
+    (:semioctagonalScreen)
+    private function nearbyWidthAt(dc as Dc, y as Number) as Number {
+        return 96; // Inside the 112 px main title window with a margin.
     }
 
     (:semioctagonalScreen)

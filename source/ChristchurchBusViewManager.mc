@@ -397,7 +397,7 @@ class ChristchurchBusViewManager {
 
     (:nearby)
     private function pageDistanceSuffix(stop as Dictionary) as String? {
-        return isNearbyPage(stop) || currentDistance == null ? null : " " + (currentDistance as String);
+        return isNearbyPage(stop) ? currentDistance : null;
     }
 
     (:noNearby)
@@ -412,7 +412,7 @@ class ChristchurchBusViewManager {
 
     (:nearby)
     private function codeSubtitle(stop as Dictionary) as String? {
-        return isNearbyPage(stop) ? currentDistance : null;
+        return null;
     }
 
     (:nearby)
