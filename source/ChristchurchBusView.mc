@@ -4,6 +4,7 @@ import Toybox.Graphics;
 import Toybox.WatchUi;
 import Toybox.Time;
 import Toybox.Time.Gregorian;
+import Toybox.System;
 
 class ChristchurchBusView extends BaseChristchurchBusView {
     var data as Dictionary<String, String or Array> = {} as Dictionary<String, String or Array>;
@@ -11,7 +12,11 @@ class ChristchurchBusView extends BaseChristchurchBusView {
     private var fittedSecond as Number = -1;
     private var fittedWidth as Number = -1;
     private var fittedHeight as Number = -1;
+    private var fittedVisits as Array?;
+    private var fittedVisitCount as Number = -1;
     private var measurementDc as Dc?;
+    // Temporary, one-row diagnostics for the simulator's first data draw.
+    private var fitDiagnosticPending as Boolean = true;
         
     function initialize(data as Dictionary<String, String or Array>, displayName as String, dataIsStale as Boolean) {
         BaseChristchurchBusView.initialize(displayName, dataIsStale);
@@ -35,29 +40,46 @@ class ChristchurchBusView extends BaseChristchurchBusView {
 
         var now = Time.now();
         var second = now.value();
-        if (second != fittedSecond || screenWidth != fittedWidth || screenHeight != fittedHeight) {
+        var visitsToFit = data["MonitoredStopVisit"] as Array<Dictionary>?;
+        if (second != fittedSecond || screenWidth != fittedWidth || screenHeight != fittedHeight ||
+            visitsToFit != fittedVisits ||
+            (visitsToFit != null && visitsToFit.size() != fittedVisitCount)) {
             fittedRows = [];
             fittedSecond = second;
             fittedWidth = screenWidth;
             fittedHeight = screenHeight;
+            fittedVisits = visitsToFit;
+            fittedVisitCount = visitsToFit != null ? visitsToFit.size() : -1;
             measurementDc = dc;
             var index = 0;
             var lineCount = 0;
             var rowY = cursorY;
-            var visitsToFit = data["MonitoredStopVisit"] as Array<Dictionary>?;
             if (visitsToFit != null) {
                 while (lineCount < Constants.LINES_TO_SHOW && index < visitsToFit.size()) {
                     var visitToFit = visitsToFit[index];
-                    var departure = Utils.parseIsoDate(visitToFit["ExpectedDepartureTime"] as String);
+                    var departureText = visitToFit["ExpectedDepartureTime"] as String?;
+                    var departure = departureText != null ? Utils.parseIsoDate(departureText) : null;
                     if (departure != null) {
                         var difference = departure.compare(now);
                         if (difference >= 0) {
                             var wait = (difference / 60).format("%02d") + ":" + (difference % 60).format("%02d");
                             var rightX = calculateViewPortBoundaryX(rowY, lineHeight, screenWidth, screenHeight, true);
                             var available = rightX - nameColumnX - Constants.HORIZONTAL_SPACE;
-                            var fitted = DepartureRowFit.fit(wait, visitToFit["PublishedLineName"] as String,
-                                visitToFit["DestinationName"] as String, available, method(:measureRow));
-                            fittedRows.add([fitted[0], fitted[1], visitToFit["VehicleAtStop"]]);
+                            if (available < 1) {
+                                available = 1;
+                            }
+                            var route = visitToFit["PublishedLineName"] as String?;
+                            var destination = visitToFit["DestinationName"] as String?;
+                            if (fitDiagnosticPending) {
+                                System.println("Row fit start: width=" + available + " route?=" + (route != null) +
+                                    " destination?=" + (destination != null));
+                            }
+                            var fitted = DepartureRowFit.fit(wait, route, destination, available, method(:measureRow));
+                            if (fitDiagnosticPending) {
+                                System.println("Row fit completed");
+                                fitDiagnosticPending = false;
+                            }
+                            fittedRows.add([fitted[0], fitted[1], visitToFit["VehicleAtStop"] == true]);
                             rowY += lineHeight + Constants.VERTICAL_SPACE;
                             lineCount++;
                         }
@@ -120,7 +142,14 @@ class ChristchurchBusView extends BaseChristchurchBusView {
     }
 
     private function measureRow(font as Graphics.FontType, text as String) as Number {
-        return (measurementDc as Dc).getTextWidthInPixels(text, font);
+        if (fitDiagnosticPending) {
+            System.println("Row measure start: font=" + font + " length=" + text.length());
+        }
+        var measured = (measurementDc as Dc).getTextWidthInPixels(text, font);
+        if (fitDiagnosticPending) {
+            System.println("Row measure completed: width=" + measured);
+        }
+        return measured;
     }
 
    (:roundScreen)

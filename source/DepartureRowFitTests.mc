@@ -71,3 +71,39 @@ function testDepartureRowKeepsPrefix(logger as Logger) as Boolean {
                             "prefix fallback: expected width <= 35, got " + fixture.width(fit[1], fit[0]));
     return true;
 }
+
+(:test)
+function testDepartureRowMissingNames(logger as Logger) as Boolean {
+    var fixture = new RowWidthFixture();
+    var fit = DepartureRowFit.fit("16:28", null, null, 100, fixture.method(:width));
+    Test.assertEqualMessage(true, "16:28:  ()".equals(fit[0]),
+                            "missing names: expected empty route and destination, got " + fit[0]);
+    fit = DepartureRowFit.fit("16:28", "", "", 25, fixture.method(:width));
+    Test.assertEqualMessage(true, "16:28: ".equals(fit[0]),
+                            "empty names: expected time prefix without false ellipsis, got " + fit[0]);
+    Test.assertEqualMessage(true, fixture.width(fit[1], fit[0]) <= 25,
+                            "empty names: expected width <= 25, got " + fixture.width(fit[1], fit[0]));
+    return true;
+}
+
+(:test)
+function testDepartureRowUnicodeDestination(logger as Logger) as Boolean {
+    var fixture = new RowWidthFixture();
+    var fit = DepartureRowFit.fit("16:28", "8", "Rāpaki (via ferry)", 70, fixture.method(:width));
+    Test.assertEqualMessage(0, (fit[0] as String).find("16:28: 8 ("),
+                            "Unicode: expected time and route prefix, got " + fit[0]);
+    Test.assertEqualMessage(true, (fit[0] as String).find("…)") != null,
+                            "Unicode: expected ellipsis, got " + fit[0]);
+    Test.assertEqualMessage(true, fixture.width(fit[1], fit[0]) <= 70,
+                            "Unicode: expected width <= 70, got " + fixture.width(fit[1], fit[0]));
+    return true;
+}
+
+(:test)
+function testDepartureRowNonPositiveWidth(logger as Logger) as Boolean {
+    var fixture = new RowWidthFixture();
+    var fit = DepartureRowFit.fit("16:28", "8", "Lyttelton", -1, fixture.method(:width));
+    Test.assertEqualMessage(true, "16:28: 8".equals(fit[0]),
+                            "negative width: expected time and route fallback, got " + fit[0]);
+    return true;
+}
