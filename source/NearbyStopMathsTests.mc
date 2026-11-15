@@ -587,3 +587,17 @@ function testPageOrderNoFavouritesNoNearby(logger as Logger) as Boolean {
 
     return true;
 }
+
+(:test, :nearby)
+function testFavouritesBeforeNearbySettingFallback(logger as Logger) as Boolean {
+    Test.assertEqualMessage(0, NearbyAvailability.normaliseFavouritesBeforeNearby(null), "blank");
+    Test.assertEqualMessage(0, NearbyAvailability.normaliseFavouritesBeforeNearby(""), "empty string");
+    Test.assertEqualMessage(0, NearbyAvailability.normaliseFavouritesBeforeNearby("1"), "string is not numeric");
+    Test.assertEqualMessage(0, NearbyAvailability.normaliseFavouritesBeforeNearby(true), "boolean is not numeric");
+    Test.assertEqualMessage(0, NearbyAvailability.normaliseFavouritesBeforeNearby(-1), "below range");
+    Test.assertEqualMessage(0, NearbyAvailability.normaliseFavouritesBeforeNearby(17), "above range");
+    Test.assertEqualMessage(0, NearbyAvailability.normaliseFavouritesBeforeNearby(0), "nearby first");
+    Test.assertEqualMessage(1, NearbyAvailability.normaliseFavouritesBeforeNearby(1), "one favourite first");
+    Test.assertEqualMessage(16, NearbyAvailability.normaliseFavouritesBeforeNearby(16), "maximum");
+    return true;
+}
