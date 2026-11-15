@@ -60,8 +60,11 @@ function testTileCacheBoundAndExpiry(logger as Logger) as Boolean {
     reader.useTestIndex();
     var tile = ChristchurchBusTileTestData.tile();
     var keys = ["test-a", "test-b", "test-c"];
-    // Isolate test keys from normal stored tiles on the simulator.
+    // Storage persists between simulator tests and test runs.
     Storage.deleteValue("nearby:test-index");
+    for (var i = 0; i < keys.size(); i++) {
+        Storage.deleteValue("nearby:" + keys[i]);
+    }
     for (var i = 0; i < keys.size(); i++) {
         reader.writeCache(keys[i], tile);
         Test.assertMessage(reader.readCache(keys[i], false) != null, "fresh cache " + i);
@@ -85,6 +88,8 @@ function testTileCacheBoundAndExpiry(logger as Logger) as Boolean {
 function testTileCacheLarge(logger as Logger) as Boolean {
     var reader = new ChristchurchBusTileReader();
     reader.useTestIndex();
+    Storage.deleteValue("nearby:test-index");
+    Storage.deleteValue("nearby:test-large");
     var tile = ChristchurchBusTileTestData.tile();
     var stops = [] as Array;
     for (var i = 0; i < 56; i++) {

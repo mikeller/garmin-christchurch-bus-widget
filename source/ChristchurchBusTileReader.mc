@@ -42,8 +42,8 @@ class ChristchurchBusTileReader {
         var stops = tile["s"];
         if (!(tile["v"] instanceof Number) || tile["v"] != 1 ||
             !(generation instanceof String) || (generation as String).length() != 10 ||
-            (generation as String).substring(4, 5) != "-" ||
-            (generation as String).substring(7, 8) != "-" || !(stops instanceof Array)) {
+            !"-".equals((generation as String).substring(4, 5)) ||
+            !"-".equals((generation as String).substring(7, 8)) || !(stops instanceof Array)) {
             return false;
         }
         var date = generation as String;
@@ -109,7 +109,7 @@ class ChristchurchBusTileReader {
             base = DEFAULT_URL;
         }
         // Both a bare base and one ending in '/' form the same URL.
-        if ((base as String).length() > 0 && (base as String).substring((base as String).length() - 1, (base as String).length()) == "/") {
+        if ((base as String).length() > 0 && "/".equals((base as String).substring((base as String).length() - 1, (base as String).length()))) {
             base = (base as String).substring(0, (base as String).length() - 1);
         }
         try {
@@ -168,7 +168,7 @@ class ChristchurchBusTileReader {
             var fetched = data["at"];
             var tile = data["tile"];
             if (!(fetched instanceof Number) || !validTile(tile) ||
-                data["g"] != (tile as Dictionary)["g"]) {
+                !((data["g"] as String).equals((tile as Dictionary)["g"]))) {
                 return null;
             }
             if (!allowExpired && (Time.now().value() - (fetched as Number) >= TTL_SECONDS ||
@@ -192,7 +192,7 @@ class ChristchurchBusTileReader {
             var previous = old instanceof Array ? old as Array : [] as Array;
             var keys = [] as Array;
             for (var i = 0; i < previous.size(); i++) {
-                if (previous[i] instanceof String && previous[i] != key &&
+                if (previous[i] instanceof String && !(previous[i] as String).equals(key) &&
                     keys.size() < 1) {
                     keys.add(previous[i]);
                 }
@@ -208,8 +208,8 @@ class ChristchurchBusTileReader {
                 return;
             }
             for (var i = 0; i < previous.size(); i++) {
-                if (previous[i] instanceof String && previous[i] != key &&
-                    previous[i] != keys[0]) {
+                if (previous[i] instanceof String && !(previous[i] as String).equals(key) &&
+                    !(previous[i] as String).equals(keys[0])) {
                     Storage.deleteValue("nearby:" + previous[i]);
                 }
             }

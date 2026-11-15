@@ -23,7 +23,8 @@ class NearbyPageNames {
         var cleanName = clean(raw);
         for (var i = 0; i < nearby.size(); i++) {
             var other = nearby[i] as Array;
-            if (other != entry && clean(other[NearbyStopMaths.ENTRY_NAME] as String) == cleanName) {
+            if (other[NearbyStopMaths.ENTRY_CODE] != entry[NearbyStopMaths.ENTRY_CODE] &&
+                cleanName.equals(clean(other[NearbyStopMaths.ENTRY_NAME] as String))) {
                 return raw;
             }
         }
