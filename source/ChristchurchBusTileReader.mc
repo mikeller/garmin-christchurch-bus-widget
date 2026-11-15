@@ -99,6 +99,12 @@ class ChristchurchBusTileReader {
             deliverOffline(key, callback);
             return true;
         }
+        // An expired but validated tile can still populate the page list
+        // immediately while a replacement tile is requested.
+        var stale = readCache(key, true);
+        if (stale != null) {
+            callback.invoke(READY, stale["s"] as Array, true);
+        }
         if (!NearbyRequestSlots.acquire()) {
             return false;
         }

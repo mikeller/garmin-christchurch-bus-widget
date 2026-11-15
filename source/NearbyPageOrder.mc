@@ -6,13 +6,14 @@ class NearbyPageOrder {
     static const LOCATING = 1;
     static const UNAVAILABLE = 2;
     static const EMPTY = 3;
+    static const WAITING_TILE = 4;
 
     // A null code identifies the status slot, never a real stop.
     static function build(favourites as Array<Number>, nearby as Array,
                           favouriteNearby as Array, before as Number,
                           state as Number) as Array {
         var ordered = NearbyStopMaths.buildPageOrder(favourites, nearby, favouriteNearby, before);
-        if (state == READY && nearby.size() > 0) {
+        if ((state == READY && nearby.size() > 0) || state == WAITING_TILE) {
             return ordered;
         }
         var at = before < 0 ? 0 : before;

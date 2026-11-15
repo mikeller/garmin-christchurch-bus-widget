@@ -12,6 +12,7 @@ class BaseChristchurchBusView extends WatchUi.View {
     protected var distanceSuffix as String?;
     protected var titleToDraw as String = "";
     protected var nearbyPage as Boolean = false;
+    protected var staleNearbyPosition as Boolean = false;
     protected var nearbyTitleLines as Array<String> = [] as Array<String>;
     protected var nearbyFont as Graphics.FontType = Graphics.FONT_SYSTEM_SMALL;
     protected var nearbyLineHeight as Number = 0;
@@ -31,6 +32,10 @@ class BaseChristchurchBusView extends WatchUi.View {
 
     function setNearbyPage() as Void {
         nearbyPage = true;
+    }
+
+    function setStaleNearbyPosition(stale as Boolean) as Void {
+        staleNearbyPosition = stale;
     }
 
     function onLayout(dc as Dc) as Void {
@@ -128,6 +133,7 @@ class BaseChristchurchBusView extends WatchUi.View {
             var connectionProblemIcon = WatchUi.loadResource(Rez.Drawables.ConnectionProblemIcon) as BitmapReference;
             dc.drawBitmap(screenWidth / 2 - 10, 2 * Constants.VERTICAL_SPACE, connectionProblemIcon);
         }
+        drawNearbyFixIndicator(dc);
 
         if (nearbyPage) {
             cursorY = nearbyStartY;
@@ -144,7 +150,7 @@ class BaseChristchurchBusView extends WatchUi.View {
         }
         var titleWidth = getTitleWidth(dc);
 
-        cursorY = screenHeight / 10;
+        cursorY = staleNearbyPosition ? screenHeight / 6 : screenHeight / 10;
         dc.drawText(titleWidth / 2, cursorY, Graphics.FONT_SYSTEM_SMALL, titleToDraw, Graphics.TEXT_JUSTIFY_CENTER);
         cursorY += dc.getFontHeight(Graphics.FONT_SYSTEM_SMALL) + Constants.VERTICAL_SPACE;
         dc.setPenWidth(Constants.LINE_WIDTH);
@@ -155,6 +161,34 @@ class BaseChristchurchBusView extends WatchUi.View {
             cursorY += dc.getFontHeight(Graphics.FONT_SYSTEM_TINY) + Constants.VERTICAL_SPACE;
         }
     }
+
+    (:nearby)
+    protected function drawNearbyFixIndicator(dc as Dc) as Void {
+        if (!staleNearbyPosition) {
+            return;
+        }
+        var rect = NearbyFixIndicator.rect(dc.getWidth(), dc.getHeight(), dataIsStale);
+        if (rect == null) {
+            return;
+        }
+        var x = rect[0];
+        var y = rect[1];
+        dc.setColor(Graphics.COLOR_RED, Constants.COLOUR_BACKGROUND);
+        dc.setPenWidth(1);
+        // Rotated body (diamond), two panels and an exclamation mark.
+        dc.drawLine(x + 6, y + 2, x + 9, y + 5);
+        dc.drawLine(x + 9, y + 5, x + 6, y + 8);
+        dc.drawLine(x + 6, y + 8, x + 3, y + 5);
+        dc.drawLine(x + 3, y + 5, x + 6, y + 2);
+        dc.fillRectangle(x, y + 3, 2, 4);
+        dc.fillRectangle(x + 10, y + 3, 2, 4);
+        dc.drawLine(x + 6, y + 9, x + 6, y + 10);
+        dc.drawPoint(x + 6, y + 11);
+        dc.setColor(Constants.COLOUR_FOREGROUND, Constants.COLOUR_BACKGROUND);
+    }
+
+    (:noNearby)
+    protected function drawNearbyFixIndicator(dc as Dc) as Void {}
 
     (:roundScreen)
     private function getTitleWidth(dc as Dc) as Number {

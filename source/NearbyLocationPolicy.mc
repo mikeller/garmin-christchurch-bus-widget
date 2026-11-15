@@ -3,23 +3,17 @@ import Toybox.Position;
 
 (:nearby)
 class NearbyLocationPolicy {
-    static const RECENT_MAX_AGE_SEC = 300;
-    static const NEARBY_LAST_KNOWN_MAX_AGE_SEC = 1800;
+    static const NEARBY_STALE_FIX_SEC = 600;
 
-    static function accepts(accuracy as Position.Quality, fixSeconds as Number?,
-                            nowSeconds as Number) as Boolean {
-        if (fixSeconds == null || accuracy < Position.QUALITY_LAST_KNOWN) {
-            return false;
+    // [usable, stale, acquire]. A missing timestamp is unknown age, not an
+    // absent location. No arbitrary upper age limit is imposed.
+    static function decide(accuracy as Position.Quality, fixSeconds as Number?,
+                           nowSeconds as Number) as Array<Boolean> {
+        if (accuracy < Position.QUALITY_LAST_KNOWN) {
+            return [false, false, true];
         }
-        var age = nowSeconds - (fixSeconds as Number);
-        if (age < 0) {
-            return false;
-        }
-        if (accuracy == Position.QUALITY_LAST_KNOWN) {
-            // A recent fix suffices indoors when the user has not travelled;
-            // 30 minutes bounds the risk of showing stops from an earlier trip.
-            return age <= NEARBY_LAST_KNOWN_MAX_AGE_SEC;
-        }
-        return accuracy >= Position.QUALITY_POOR && age <= RECENT_MAX_AGE_SEC;
+        var stale = fixSeconds == null ||
+            nowSeconds - (fixSeconds as Number) > NEARBY_STALE_FIX_SEC;
+        return [true, stale, stale || accuracy < Position.QUALITY_POOR];
     }
 }

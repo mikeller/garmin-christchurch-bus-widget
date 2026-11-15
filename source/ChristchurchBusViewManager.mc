@@ -256,7 +256,14 @@ class ChristchurchBusViewManager {
     (:nearby)
     function onNearbyLocation() as Void {
         if (nearbyLocation != null && (nearbyLocation as NearbyLocation).getState() == NearbyLocation.FIX) {
-            refreshNearby(false);
+            if (slotState == NearbyPageOrder.LOCATING) {
+                slotState = NearbyPageOrder.WAITING_TILE;
+                rebuildPages();
+            }
+            refreshNearby(fixAt != (nearbyLocation as NearbyLocation).getFixTime());
+            if (pages.size() > 0) {
+                displayBusesForCurrentStop();
+            }
         } else {
             clearNearby();
             slotState = NearbyPageOrder.UNAVAILABLE;
@@ -282,7 +289,12 @@ class ChristchurchBusViewManager {
             return;
         }
         var latest = (nearbyLocation as NearbyLocation).getCoordinates();
-        if (latest == null || tileLat == null || tileLon == null ||
+        var latestTile = latest == null ? null : NearbyStopMaths.tileId(latest[0], latest[1]);
+        var pendingTile = tileLat == null || tileLon == null ? null :
+            NearbyStopMaths.tileId(tileLat as Number, tileLon as Number);
+        if (latest == null || pendingTile == null ||
+            (latestTile as Array)[0] != (pendingTile as Array)[0] ||
+            (latestTile as Array)[1] != (pendingTile as Array)[1] ||
             NearbyStopMaths.movedMoreThan(latest[0], latest[1],
                 tileLat as Number, tileLon as Number, 100)) {
             fixAt = 0;
@@ -317,13 +329,13 @@ class ChristchurchBusViewManager {
         for (var i = 0; i < favourites.size(); i++) {
             codes.add(favourites[i]["stopId"] as Number);
         }
-        var split = NearbyStopMaths.nearestSplit(stops, tileLat as Number, tileLon as Number,
+        var split = NearbyStopMaths.nearestSplit(stops, latest[0], latest[1],
             codes, ChristchurchBusAppProperties.nearbyStopsToShow());
         nearbyEntries = split[0] as Array;
         slotState = nearbyEntries.size() == 0 ? NearbyPageOrder.EMPTY : NearbyPageOrder.READY;
         setNearbyStatus(null);
         favouriteEntries = stale ? [] as Array : split[1] as Array;
-        fixAt = stale ? 0 : (nearbyLocation as NearbyLocation).getFixTime();
+        fixAt = (nearbyLocation as NearbyLocation).getFixTime();
         var saved = [] as Array;
         for (var i = 0; i < nearbyEntries.size(); i++) {
             var entry = nearbyEntries[i] as Array;
@@ -379,6 +391,10 @@ class ChristchurchBusViewManager {
         logPageDecision();
         if (pages.size() > 0) {
             displayBusesForCurrentStop();
+        } else if (slotState == NearbyPageOrder.WAITING_TILE) {
+            currentView = new NearbyStatusView(
+                WatchUi.loadResource(Rez.Strings.LoadingNearbyStops) as String, null);
+            switchView();
         }
     }
 
@@ -402,6 +418,7 @@ class ChristchurchBusViewManager {
         currentDistance = distanceForStop(stop);
         var view = new BaseChristchurchBusView(currentPageTitle, false, codeSubtitle(stop),
             pageDistanceSuffix(stop));
+        view.setStaleNearbyPosition(stalePosition());
         if (isNearbyPage(stop) || currentTitleFromTile) {
             view.setNearbyPage();
         }
@@ -425,6 +442,17 @@ class ChristchurchBusViewManager {
     (:noNearby)
     private function cachedTitleRows(id as Number) as Array? {
         return null;
+    }
+
+    (:nearby)
+    private function stalePosition() as Boolean {
+        return ChristchurchBusAppProperties.nearbyEnabled() && nearbyLocation != null &&
+            (nearbyLocation as NearbyLocation).isStale();
+    }
+
+    (:noNearby)
+    private function stalePosition() as Boolean {
+        return false;
     }
 
     (:nearby)
@@ -454,7 +482,9 @@ class ChristchurchBusViewManager {
         var hint = slotState == NearbyPageOrder.UNAVAILABLE ?
             WatchUi.loadResource(slotTileError ? Rez.Strings.NearbyTileHint :
                 Rez.Strings.NearbyLocationHint) as String : null;
-        currentView = new NearbyStatusView(WatchUi.loadResource(title) as String, hint);
+        var status = new NearbyStatusView(WatchUi.loadResource(title) as String, hint);
+        status.setStaleNearbyPosition(stalePosition());
+        currentView = status;
         switchView();
     }
 
@@ -499,7 +529,8 @@ class ChristchurchBusViewManager {
     (:nearby)
     private function distanceForStop(stop as Dictionary) as String? {
         var metres = stop["metres"] as Number?;
-        if (metres == null || fixAt == 0 || Time.now().value() - fixAt > 300) {
+        if (metres == null || nearbyLocation == null ||
+            (nearbyLocation as NearbyLocation).getState() != NearbyLocation.FIX) {
             return null;
         }
         return NearbyPageNames.distance(metres as Number);
@@ -581,6 +612,7 @@ class ChristchurchBusViewManager {
             var suffix = pageDistanceSuffix(stop);
             if (data == null) {
                 var base = new BaseChristchurchBusView(currentPageTitle, dataIsStale, subtitle, suffix);
+                base.setStaleNearbyPosition(stalePosition());
                 if (isNearbyPage(stop) || currentTitleFromTile) {
                     base.setNearbyPage();
                 }
@@ -588,6 +620,7 @@ class ChristchurchBusViewManager {
             } else {
                 var departures = new ChristchurchBusView(data as Dictionary<String, String or Array>,
                     currentPageTitle, dataIsStale, subtitle, suffix);
+                departures.setStaleNearbyPosition(stalePosition());
                 if (isNearbyPage(stop) || currentTitleFromTile) {
                     departures.setNearbyPage();
                 }

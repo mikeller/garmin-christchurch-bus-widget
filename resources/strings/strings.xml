@@ -17,6 +17,7 @@
     <string id="FavouritesBeforeNearbyTitle">Number of favourites before other nearby stops (0: nearby first)</string>
     <string id="FavouritesBeforeNearbyRangeError">Choose 0 to 16 favourites.</string>
     <string id="Locating">Locating...</string>
+    <string id="LoadingNearbyStops">Loading nearby stops...</string>
     <string id="NearbyUnavailable">Nearby unavailable</string>
     <string id="NoStopsNearby">No stops nearby</string>
     <string id="StopCodeFallback">Stop $1$</string>

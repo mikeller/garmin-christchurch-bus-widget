@@ -70,6 +70,7 @@ class NearbyStatusView extends BaseChristchurchBusView {
     function onUpdate(dc as Dc) as Void {
         dc.setColor(Constants.COLOUR_FOREGROUND, Constants.COLOUR_BACKGROUND);
         dc.clear();
+        drawNearbyFixIndicator(dc);
         for (var i = 0; i < lines.size(); i++) {
             dc.drawText(dc.getWidth() / 2, startY + i * lineHeight, font,
                 lines[i], Graphics.TEXT_JUSTIFY_CENTER);

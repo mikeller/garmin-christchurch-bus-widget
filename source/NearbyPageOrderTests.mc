@@ -52,6 +52,15 @@ function testNearbySlotPageOrder(logger as Logger) as Boolean {
         NearbyPageOrder.UNAVAILABLE);
     Test.assertEqualMessage(100, (single[0] as Array)[NearbyStopMaths.PAGE_CODE],
         "one favourite before slot");
+    var waiting = NearbyPageOrder.build(one, [] as Array, [] as Array, 0,
+        NearbyPageOrder.WAITING_TILE);
+    Test.assertEqualMessage(1, waiting.size(),
+        "position exists: only favourite, no locating slot while tile loads");
+    Test.assertEqualMessage(100, (waiting[0] as Array)[NearbyStopMaths.PAGE_CODE],
+        "favourite remains visible during tile load");
+    Test.assertEqualMessage(0, NearbyPageOrder.build([] as Array<Number>,
+        [] as Array, [] as Array, 0, NearbyPageOrder.WAITING_TILE).size(),
+        "without favourites loading is a standalone view, not a page slot");
     return true;
 }
 
