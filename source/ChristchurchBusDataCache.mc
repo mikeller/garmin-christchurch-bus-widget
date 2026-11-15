@@ -147,7 +147,9 @@ class ChristchurchBusDataCache {
             var result = stored as Dictionary;
             var rows = result["stops"] as Array?;
             var at = result["at"] as Number?;
-            if (at == null || at <= 0) {
+            // A zero timestamp means the position's age was unknown, not that
+            // the widget failed to cache the nearby result.
+            if (at == null || at < 0) {
                 return null;
             }
             for (var i = 0; i < (rows as Array).size(); i++) {
