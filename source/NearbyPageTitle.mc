@@ -2,6 +2,7 @@ import Toybox.Lang;
 import Toybox.Graphics;
 
 // Layout work is done in onLayout, not while drawing departure rows.
+(:nearby)
 class NearbyPageTitle {
     private static var cachedFonts as Array<Graphics.FontType>?;
     private static var cachedSize as Number = -1;

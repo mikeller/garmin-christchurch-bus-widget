@@ -5,6 +5,7 @@ import Toybox.Time;
 import Toybox.Time.Gregorian;
 import Toybox.Math;
 
+(:nearby)
 class BaseChristchurchBusView extends WatchUi.View {
     protected var siteName as String = "";
     protected var dataIsStale as Boolean = false;
@@ -207,6 +208,53 @@ class BaseChristchurchBusView extends WatchUi.View {
     (:semioctagonalScreen)
     private function nearbyWidthAt(dc as Dc, y as Number) as Number {
         return 96; // Inside the 112 px main title window with a margin.
+    }
+
+    (:semioctagonalScreen)
+    private function getTitleWidth(dc as Dc) as Number {
+        return 112;
+    }
+}
+
+// Excluded devices retain master's plain favourite title and underline.
+(:noNearby)
+class BaseChristchurchBusView extends WatchUi.View {
+    protected var siteName as String = "";
+    protected var dataIsStale as Boolean = false;
+    protected var cursorY as Number = 0;
+
+    function initialize(siteName as String, dataIsStale as Boolean,
+                        subtitle as String?, distanceSuffix as String?) {
+        View.initialize();
+        self.siteName = siteName;
+        self.dataIsStale = dataIsStale;
+    }
+
+    function setNearbyPage() as Void {}
+    function setStaleNearbyPosition(stale as Boolean) as Void {}
+
+    function onUpdate(dc as Dc) as Void {
+        dc.setColor(Constants.COLOUR_FOREGROUND, Constants.COLOUR_BACKGROUND);
+        dc.clear();
+        var screenWidth = dc.getWidth();
+        var screenHeight = dc.getHeight();
+        if (dataIsStale) {
+            var icon = WatchUi.loadResource(Rez.Drawables.ConnectionProblemIcon) as BitmapReference;
+            dc.drawBitmap(screenWidth / 2 - 10, 2 * Constants.VERTICAL_SPACE, icon);
+        }
+        var titleWidth = getTitleWidth(dc);
+        cursorY = screenHeight / 10;
+        dc.drawText(titleWidth / 2, cursorY, Graphics.FONT_SYSTEM_SMALL, siteName,
+            Graphics.TEXT_JUSTIFY_CENTER);
+        cursorY += dc.getFontHeight(Graphics.FONT_SYSTEM_SMALL) + Constants.VERTICAL_SPACE;
+        dc.setPenWidth(Constants.LINE_WIDTH);
+        dc.drawLine(0, cursorY, titleWidth, cursorY);
+        cursorY += Constants.LINE_WIDTH + Constants.VERTICAL_SPACE;
+    }
+
+    (:roundScreen)
+    private function getTitleWidth(dc as Dc) as Number {
+        return dc.getWidth();
     }
 
     (:semioctagonalScreen)
