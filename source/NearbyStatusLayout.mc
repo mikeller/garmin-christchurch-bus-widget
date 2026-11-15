@@ -3,6 +3,7 @@ import Toybox.Graphics;
 
 // Width measurement is supplied by the view so the wrapping logic can be
 // tested without a graphics context. Called only while laying out a new view.
+(:nearby)
 class NearbyStatusLayout {
     static function wrap(text as String, maxWidth as Number, measure as Method, maxLines as Number) as Array<String>? {
         return wrapMeasured(text, maxWidth, measure, null, Graphics.FONT_XTINY, maxLines);
