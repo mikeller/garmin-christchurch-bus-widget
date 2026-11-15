@@ -191,10 +191,13 @@ class ChristchurchBusTileReader {
             var old = Storage.getValue(indexKey);
             var previous = old instanceof Array ? old as Array : [] as Array;
             var keys = [] as Array;
-            for (var i = 0; i < previous.size(); i++) {
-                if (previous[i] instanceof String && !(previous[i] as String).equals(key) &&
+            // Index order is oldest to newest. Retain the most recently used
+            // previous tile, not the oldest one being evicted.
+            for (var i = previous.size(); i > 0; i--) {
+                var candidate = previous[i - 1];
+                if (candidate instanceof String && !(candidate as String).equals(key) &&
                     keys.size() < 1) {
-                    keys.add(previous[i]);
+                    keys.add(candidate);
                 }
             }
             Storage.setValue(storageKey, {
