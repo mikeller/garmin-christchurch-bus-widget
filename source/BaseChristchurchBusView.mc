@@ -13,7 +13,7 @@ class BaseChristchurchBusView extends WatchUi.View {
     protected var titleToDraw as String = "";
     protected var nearbyPage as Boolean = false;
     protected var nearbyTitleLines as Array<String> = [] as Array<String>;
-    protected var nearbyFont as Graphics.FontType = Graphics.FONT_XTINY;
+    protected var nearbyFont as Graphics.FontType = Graphics.FONT_SYSTEM_SMALL;
     protected var nearbyLineHeight as Number = 0;
     protected var nearbyStartY as Number = 0;
 
@@ -68,7 +68,7 @@ class BaseChristchurchBusView extends WatchUi.View {
                 }
             }
             if (nearbyTitleLines.size() == 0) {
-                nearbyFont = Graphics.FONT_SYSTEM_XTINY;
+                nearbyFont = Graphics.FONT_SYSTEM_SMALL;
                 var firstWidth = nearbyWidthAt(dc, nearbyStartY);
                 var secondWidth = nearbyWidthAt(dc, nearbyStartY +
                     dc.getFontHeight(nearbyFont) + Constants.VERTICAL_SPACE);

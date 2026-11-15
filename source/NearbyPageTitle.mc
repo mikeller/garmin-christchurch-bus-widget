@@ -1,14 +1,24 @@
 import Toybox.Lang;
 import Toybox.Graphics;
 
+// Small width-measurer protocol for pure layout tests. Views use the Dc
+// directly, without Method references or symbol callbacks.
+class NearbyPageTitleMeasure {
+    function width(text as String) as Number {
+        return 0;
+    }
+}
+
 // Title layout is computed once in onLayout, never while drawing departure
 // rows. The parenthesised distance is an indivisible suffix.
 class NearbyPageTitle {
-    // Stay within the system-font family used by the ordinary favourite
-    // title. Garmin does not expose a font-weight property to inspect.
+    // The favourite header draws with FONT_SYSTEM_SMALL. On Descent Mk1 the
+    // smaller system fonts visibly have a different weight, and there is no
+    // custom font or API-level 3 vector-font weight selection. Preserve the
+    // same bold face on both lines; truncate the name rather than the distance
+    // if this one font cannot fit the title in two lines.
     static function fonts() as Array<Graphics.FontType> {
-        return [Graphics.FONT_SYSTEM_SMALL, Graphics.FONT_SYSTEM_TINY,
-                Graphics.FONT_SYSTEM_XTINY];
+        return [Graphics.FONT_SYSTEM_SMALL];
     }
 
     static function text(name as String, distance as String?) as String {
@@ -17,7 +27,7 @@ class NearbyPageTitle {
 
     // Injectable width measurement for the pure layout tests.
     static function fit(name as String, distance as String?, firstWidth as Number,
-                        secondWidth as Number, measure as Method) as Array<String>? {
+                        secondWidth as Number, measure as NearbyPageTitleMeasure) as Array<String>? {
         return fitMeasured(name, distance, firstWidth, secondWidth, measure, null,
             Graphics.FONT_XTINY);
     }
@@ -29,7 +39,7 @@ class NearbyPageTitle {
     }
 
     static function truncate(name as String, distance as String?, firstWidth as Number,
-                             secondWidth as Number, measure as Method) as Array<String>? {
+                             secondWidth as Number, measure as NearbyPageTitleMeasure) as Array<String>? {
         return truncateMeasured(name, distance, firstWidth, secondWidth, measure, null,
             Graphics.FONT_XTINY);
     }
@@ -40,15 +50,15 @@ class NearbyPageTitle {
         return truncateMeasured(name, distance, firstWidth, secondWidth, null, dc, font);
     }
 
-    private static function width(text as String, measure as Method?, dc as Dc?,
+    private static function width(text as String, measure as NearbyPageTitleMeasure?, dc as Dc?,
                                   font as Graphics.FontType) as Number {
         return dc != null ? (dc as Dc).getTextWidthInPixels(text, font) :
-            (measure as Method).invoke(text) as Number;
+            (measure as NearbyPageTitleMeasure).width(text);
     }
 
     private static function fitMeasured(name as String, distance as String?,
                                         firstWidth as Number, secondWidth as Number,
-                                        measure as Method?, dc as Dc?,
+                                        measure as NearbyPageTitleMeasure?, dc as Dc?,
                                         font as Graphics.FontType) as Array<String>? {
         var full = text(name, distance);
         if (width(full, measure, dc, font) <= firstWidth) {
@@ -107,7 +117,7 @@ class NearbyPageTitle {
 
     private static function truncateMeasured(name as String, distance as String?,
                                              firstWidth as Number, secondWidth as Number,
-                                             measure as Method?, dc as Dc?,
+                                             measure as NearbyPageTitleMeasure?, dc as Dc?,
                                              font as Graphics.FontType) as Array<String>? {
         var suffix = distance == null ? "" : "(" + (distance as String) + ")";
         if (distance != null && width(suffix, measure, dc, font) > secondWidth) {
