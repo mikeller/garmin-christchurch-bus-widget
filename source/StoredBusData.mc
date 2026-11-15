@@ -75,6 +75,7 @@ class StoredBusData {
         return false;
     }
 
+    (:nearby)
     static function validNearbyResult(value as Object?) as Boolean {
         if (!(value instanceof Dictionary)) {
             return false;

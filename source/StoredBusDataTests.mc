@@ -36,6 +36,11 @@ function testStoredBusDataUpgradeValidation(logger as Logger) as Boolean {
     }), "reject old or malformed visits");
     Test.assertMessage(!StoredBusData.validDeparture({"ValidUntil" => 42}),
         "reject invalid expiry shape");
+    return true;
+}
+
+(:test, :nearby)
+function testStoredNearbyResultValidation(logger as Logger) as Boolean {
     Test.assertMessage(StoredBusData.validNearbyResult({
         "at" => 1234, "stops" => [[52927, "Willesden Ave", 120]]
     }), "current nearby result");
