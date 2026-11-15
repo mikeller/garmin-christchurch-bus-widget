@@ -36,7 +36,7 @@ class BaseChristchurchBusView extends WatchUi.View {
     function onLayout(dc as Dc) as Void {
         if (nearbyPage) {
             nearbyStartY = dc.getHeight() / 4;
-            var fonts = NearbyPageTitle.fonts();
+            var fonts = NearbyPageTitle.effectiveFonts(dc);
             nearbyTitleLines = [];
             // Prefer fewer lines, then a larger font. All width measurements
             // use the chosen font and the chord at the actual baseline.

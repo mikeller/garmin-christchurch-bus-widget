@@ -67,3 +67,31 @@ function testNearbyPageTitleWithDistance(logger as Logger) as Boolean {
         "bottom departure must have usable chord width");
     return true;
 }
+
+(:test, :nearby)
+function testNearbyWordSplitterAndFontHeights(logger as Logger) as Boolean {
+    var expected = [[], ["Stop"], ["Hereford", "St"], ["Hereford", "St"],
+                    ["Hereford", "St"], ["Hereford", "St", "near", "Montreal", "St"]];
+    var inputs = ["", "Stop", "Hereford St", "  Hereford  St  ",
+                  "Hereford St ", "Hereford St near Montreal St"];
+    for (var i = 0; i < inputs.size(); i++) {
+        var words = NearbyPageTitle.splitWords(inputs[i]);
+        Test.assertEqualMessage((expected[i] as Array).size(), words.size(),
+            "split word count");
+        for (var j = 0; j < words.size(); j++) {
+            Test.assertEqualMessage((expected[i] as Array)[j], words[j],
+                "split word");
+        }
+    }
+    var fonts = NearbyPageTitle.fonts();
+    var mk1 = NearbyPageTitle.smallerFonts(fonts, [29, 26, 26]);
+    Test.assertEqualMessage(2, mk1.size(), "Mk1 regular XTINY is not smaller");
+    Test.assertEqualMessage(Graphics.FONT_SYSTEM_TINY, mk1[1], "smallest Mk1 font");
+    Test.assertEqualMessage(3, NearbyPageTitle.smallerFonts(fonts, [29, 26, 22]).size(),
+        "strictly descending heights");
+    Test.assertEqualMessage(1, NearbyPageTitle.smallerFonts(fonts, [26, 26, 26]).size(),
+        "equal heights");
+    Test.assertEqualMessage(1, NearbyPageTitle.smallerFonts([fonts[0]], [29]).size(),
+        "single font");
+    return true;
+}

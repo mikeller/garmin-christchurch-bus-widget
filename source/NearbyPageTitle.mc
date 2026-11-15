@@ -3,6 +3,23 @@ import Toybox.Graphics;
 
 // Layout work is done in onLayout, not while drawing departure rows.
 class NearbyPageTitle {
+    private static var cachedFonts as Array<Graphics.FontType>?;
+    private static var cachedSize as Number = -1;
+
+    static function effectiveFonts(dc as Dc) as Array<Graphics.FontType> {
+        var size = dc.getWidth() * 10000 + dc.getHeight();
+        if (cachedFonts == null || cachedSize != size) {
+            var candidates = fonts();
+            var heights = [] as Array<Number>;
+            for (var i = 0; i < candidates.size(); i++) {
+                heights.add(dc.getFontHeight(candidates[i]));
+            }
+            cachedFonts = smallerFonts(candidates, heights);
+            cachedSize = size;
+        }
+        return cachedFonts as Array<Graphics.FontType>;
+    }
+
     static function rowsFit(start as Number, lines as Number, titleLineHeight as Number,
                             separatorHeight as Number, rowHeight as Number, screenHeight as Number,
                             bottomWidth as Number) as Boolean {
@@ -14,6 +31,21 @@ class NearbyPageTitle {
     static function fonts() as Array<Graphics.FontType> {
         return [Graphics.FONT_SYSTEM_SMALL, Graphics.FONT_SYSTEM_TINY,
                 Graphics.FONT_SYSTEM_XTINY];
+    }
+
+    // Only a strictly shorter font earns a slot; Mk1 XTINY is the same
+    // 26 px height as TINY, but regular rather than bold.
+    static function smallerFonts(candidates as Array<Graphics.FontType>,
+                                 heights as Array<Number>) as Array<Graphics.FontType> {
+        var kept = [] as Array<Graphics.FontType>;
+        var lastHeight = 2147483647;
+        for (var i = 0; i < candidates.size() && i < heights.size(); i++) {
+            if (heights[i] < lastHeight) {
+                kept.add(candidates[i]);
+                lastHeight = heights[i];
+            }
+        }
+        return kept;
     }
 
     static function text(name as String, distance as String?) as String {
@@ -44,9 +76,29 @@ class NearbyPageTitle {
 
     // A slash is attached to the preceding word so a break may only follow it.
     // The distance is one word and cannot be split.
+    static function splitWords(name as String) as Array<String> {
+        var result = [] as Array<String>;
+        var start = 0;
+        while (start < name.length()) {
+            while (start < name.length() && " ".equals(name.substring(start, start + 1))) {
+                start++;
+            }
+            if (start >= name.length()) {
+                break;
+            }
+            var stop = start;
+            while (stop < name.length() && !" ".equals(name.substring(stop, stop + 1))) {
+                stop++;
+            }
+            result.add(name.substring(start, stop) as String);
+            start = stop;
+        }
+        return result;
+    }
+
     private static function words(name as String, distance as String?) as Array<String> {
         var displayed = slashName(name);
-        var raw = displayed.split(" ", null);
+        var raw = splitWords(displayed);
         var result = [] as Array<String>;
         for (var i = 0; i < raw.size(); i++) {
             var word = raw[i] as String;
