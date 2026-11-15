@@ -53,10 +53,14 @@ function testNearbyPageTitleWithDistance(logger as Logger) as Boolean {
         [90, 100, 100], measured) == null, "truncation is last resort");
     var shortened = NearbyPageTitle.truncate(longName, "188 m",
         [90, 100, 100], measured);
+    Test.assertEqualMessage(3, (shortened as Array).size(),
+        "two name lines and whole distance line");
+    Test.assertEqualMessage("Extremely", (shortened as Array)[0],
+        "first name line is untruncated");
+    Test.assertEqualMessage("LongSto...", (shortened as Array)[1],
+        "last name line visibly marks truncation");
     Test.assertEqualMessage("(188 m)", (shortened as Array)[(shortened as Array).size() - 1],
         "distance not truncated");
-    Test.assertMessage(((shortened as Array)[0] as String).find("...") != null,
-        "truncated name marked");
     Test.assertEqualMessage("Stop (99 m)", NearbyPageTitle.text("Stop", "99 m"),
         "distance suffix");
     Test.assertMessage(NearbyPageTitle.rowsFit(40, 3, 28, 5, 28, 240, 170),
