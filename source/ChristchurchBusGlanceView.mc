@@ -14,14 +14,23 @@ class ChristchurchBusGlanceView extends WatchUi.GlanceView {
     private var lineName as String = "";
     private var destinationName as String = "";
     private var timeDifference as Number = 0;
+    private var nearbyAt as Number?;
+    private var nearbyAge as String = "";
+    private var secondLineText as String = Constants.NO_INFORMATION_STRING;
 
     function initialize(stop as Dictionary?) {
         GlanceView.initialize();
 
         self.stop = stop as Dictionary<String, Number or String>?;
+        if (stop != null) {
+            nearbyAt = stop["nearbyAt"] as Number?;
+        }
     }
 
     function onLayout(dc as Dc) as Void {
+        if (nearbyAt != null) {
+            nearbyAge = NearbyGlanceAge.label(nearbyAt as Number, Time.now().value());
+        }
         try {
             if (stop != null) {
                 var stopId = stop["stopId"] as Number;
@@ -72,6 +81,15 @@ class ChristchurchBusGlanceView extends WatchUi.GlanceView {
             Utils.log("Data format problem: " + exception.getErrorMessage());
             exception.printStackTrace();
         }
+        if (informationFound) {
+            var waitTime = (timeDifference / 60).format("%02d") + ":" + (timeDifference % 60).format("%02d");
+            secondLineText = waitTime + ": " + lineName + " (" + destinationName + ")";
+        } else {
+            secondLineText = Constants.NO_INFORMATION_STRING;
+        }
+        if (nearbyAt != null) {
+            secondLineText = nearbyAge + " " + secondLineText;
+        }
     }
 
     function onUpdate(dc as Graphics.Dc) as Void {
@@ -82,18 +100,16 @@ class ChristchurchBusGlanceView extends WatchUi.GlanceView {
         var secondLineY = lineHeight + Constants.VERTICAL_SPACE;
 
         if (informationFound) {
-            var waitTime = (timeDifference / 60).format("%02d") + ":" + (timeDifference % 60).format("%02d");
-
             if (busAtStop) {
                 dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_WHITE);
             } else {
                 dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
             }
 
-            dc.drawText(0, secondLineY, Graphics.FONT_SYSTEM_TINY, waitTime + ": " + lineName + " (" + destinationName + ")", Graphics.TEXT_JUSTIFY_LEFT);
+            dc.drawText(0, secondLineY, Graphics.FONT_SYSTEM_TINY, secondLineText, Graphics.TEXT_JUSTIFY_LEFT);
         } else {
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
-            dc.drawText(0, secondLineY, Graphics.FONT_SYSTEM_TINY, Constants.NO_INFORMATION_STRING, Graphics.TEXT_JUSTIFY_LEFT);
+            dc.drawText(0, secondLineY, Graphics.FONT_SYSTEM_TINY, secondLineText, Graphics.TEXT_JUSTIFY_LEFT);
         }
     }
 }

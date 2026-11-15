@@ -19,13 +19,31 @@ class ChristchurchBusApp extends Application.AppBase {
     function getGlanceView() as [ GlanceView ] or [ GlanceView, GlanceViewDelegate ] or Null {
         var lastId = ChristchurchBusDataCache.getLastStop(stops);
         var stopIndex = 0;
+        var found = false;
         for (var i = 0; i < stops.size(); i++) {
             if (stops[i]["stopId"] == lastId) {
                 stopIndex = i;
+                found = true;
                 break;
             }
         }
+        if (!found && lastId != null && ChristchurchBusAppProperties.nearbyEnabled()) {
+            var nearby = lastNearbyGlanceStop(lastId as Number);
+            if (nearby != null) {
+                return [new ChristchurchBusGlanceView(nearby)] as [GlanceView];
+            }
+        }
         return [new ChristchurchBusGlanceView(stops.size() > 0 ? stops[stopIndex] : null)] as [GlanceView];
+    }
+
+    (:nearby, :glance)
+    private function lastNearbyGlanceStop(stopId as Number) as Dictionary? {
+        return ChristchurchBusDataCache.getNearbyStop(stopId);
+    }
+
+    (:noNearby, :glance)
+    private function lastNearbyGlanceStop(stopId as Number) as Dictionary? {
+        return null;
     }
 
     (:typecheck(disableGlanceCheck))

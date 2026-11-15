@@ -134,4 +134,31 @@ class ChristchurchBusDataCache {
             // Failure to read stale data must not prevent nearby acquisition.
         }
     }
+
+    // Storage returns the whole record; retain only the matching row, not the
+    // tile, distances or the other nearby stops, in the glance.
+    (:glance, :nearby)
+    static function getNearbyStop(stopId as Number) as Dictionary? {
+        try {
+            var stored = Storage.getValue("nearby:last");
+            if (!StoredBusData.validNearbyResult(stored)) {
+                return null;
+            }
+            var result = stored as Dictionary;
+            var rows = result["stops"] as Array?;
+            var at = result["at"] as Number?;
+            if (at == null || at <= 0) {
+                return null;
+            }
+            for (var i = 0; i < (rows as Array).size(); i++) {
+                var row = (rows as Array)[i] as Array;
+                if (row[0] == stopId) {
+                    return {"stopId" => stopId, "displayName" => row[1], "nearbyAt" => at};
+                }
+            }
+        } catch (e) {
+            // Corrupt or missing persisted data is an ordinary glance fallback.
+        }
+        return null;
+    }
 }
