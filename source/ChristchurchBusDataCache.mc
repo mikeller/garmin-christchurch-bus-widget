@@ -7,10 +7,21 @@ import Toybox.Time.Gregorian;
 (:glance)
 class ChristchurchBusDataCache {
     static function tryGetCachedData(stopId as Number, ignoreExpiry as Boolean) as Dictionary<String, String or Array>? {
-        var data = Storage.getValue(stopId) as Dictionary<String, String or Array>?;
+        var stored = Storage.getValue(stopId);
+        if (stored != null && !StoredBusData.validDeparture(stored)) {
+            Storage.deleteValue(stopId);
+            return null;
+        }
+        var data = stored as Dictionary<String, String or Array>?;
         if (data != null) {
             var expiresString = data["ValidUntil"] as String?;
-            var expires = Utils.parseIsoDate(expiresString);
+            var expires = null;
+            try {
+                expires = Utils.parseIsoDate(expiresString);
+            } catch (e) {
+                Storage.deleteValue(stopId);
+                return null;
+            }
             var isStale = expires == null || (expires as Moment).lessThan(Time.now());
             if (!isStale || ignoreExpiry) {
                 Utils.log("Cache hit (" + (isStale ? "stale, " : "") + "expiry: " + expiresString + "): " + stopId);
@@ -67,7 +78,12 @@ class ChristchurchBusDataCache {
     }
 
     static function getLastStop(favourites as Array<Dictionary>) as Number? {
-        var lastStopValue = Storage.getValue(Constants.LAST_STOP_INDEX_NAME) as Dictionary<String, Number>?;
+        var stored = Storage.getValue(Constants.LAST_STOP_INDEX_NAME);
+        if (stored != null && !StoredBusData.validLastStop(stored, favourites)) {
+            Storage.deleteValue(Constants.LAST_STOP_INDEX_NAME);
+            return null;
+        }
+        var lastStopValue = stored as Dictionary<String, Number>?;
         if (lastStopValue != null) {
             var resetTimeValue = lastStopValue["resetTime"] as Number?;
             var resetTime = null;
@@ -104,6 +120,18 @@ class ChristchurchBusDataCache {
             Storage.setValue("nearby:last", {"stops" => stops, "at" => fixTime} as PropertyValueType);
         } catch (e) {
             Utils.log("Unable to persist nearby result.");
+        }
+    }
+
+    (:nearby)
+    static function discardInvalidNearbyResult() as Void {
+        try {
+            var result = Storage.getValue("nearby:last");
+            if (result != null && !StoredBusData.validNearbyResult(result)) {
+                Storage.deleteValue("nearby:last");
+            }
+        } catch (e) {
+            // Failure to read stale data must not prevent nearby acquisition.
         }
     }
 }

@@ -168,7 +168,9 @@ class ChristchurchBusTileReader {
             var fetched = data["at"];
             var tile = data["tile"];
             if (!(fetched instanceof Number) || !validTile(tile) ||
+                !(data["g"] instanceof String) ||
                 !((data["g"] as String).equals((tile as Dictionary)["g"]))) {
+                Storage.deleteValue("nearby:" + key);
                 return null;
             }
             if (!allowExpired && (Time.now().value() - (fetched as Number) >= TTL_SECONDS ||

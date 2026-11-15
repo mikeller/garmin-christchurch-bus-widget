@@ -11,14 +11,9 @@ class NearbyStatusView extends BaseChristchurchBusView {
     private var startY as Number = 0;
     private var layoutWidth as Number = -1;
     private var layoutHeight as Number = -1;
-    private var layoutDc as Dc?;
 
     function initialize(title as String, hint as String?) {
         BaseChristchurchBusView.initialize(title, false, hint, null);
-    }
-
-    private function measure(text as String) as Number {
-        return (layoutDc as Dc).getTextWidthInPixels(text, font);
     }
 
     (:roundScreen)
@@ -43,12 +38,11 @@ class NearbyStatusView extends BaseChristchurchBusView {
         var maxWidth = safeWidth(dc);
         var candidates = [Graphics.FONT_MEDIUM, Graphics.FONT_SMALL,
                           Graphics.FONT_TINY, Graphics.FONT_XTINY];
-        layoutDc = dc;
         for (var i = 0; i < candidates.size(); i++) {
             font = candidates[i] as Graphics.FontType;
-            var titleLines = NearbyStatusLayout.wrap(siteName, maxWidth, method(:measure), 2);
+            var titleLines = NearbyStatusLayout.wrapDc(siteName, maxWidth, dc, font, 2);
             var hintLines = subtitle == null ? [] as Array<String> :
-                NearbyStatusLayout.wrap(subtitle as String, maxWidth, method(:measure), 2);
+                NearbyStatusLayout.wrapDc(subtitle as String, maxWidth, dc, font, 2);
             if (titleLines == null || hintLines == null ||
                 (titleLines as Array).size() + (hintLines as Array).size() > 3) {
                 continue;
@@ -64,7 +58,6 @@ class NearbyStatusView extends BaseChristchurchBusView {
             }
             break;
         }
-        layoutDc = null;
         if (lines.size() == 0) {
             // An unexpectedly long translation must never leave a blank page.
             font = Graphics.FONT_XTINY;

@@ -14,7 +14,6 @@ class BaseChristchurchBusView extends WatchUi.View {
     protected var nearbyTitleLines as Array<String> = [] as Array<String>;
     protected var nearbyFont as Graphics.FontType = Graphics.FONT_XTINY;
     protected var nearbyLineHeight as Number = 0;
-    protected var titleDc as Dc?;
 
     protected var cursorY as Number = 0;
 
@@ -32,10 +31,6 @@ class BaseChristchurchBusView extends WatchUi.View {
         nearbyPage = true;
     }
 
-    private function measureNearbyTitle(text as String) as Number {
-        return (titleDc as Dc).getTextWidthInPixels(text, nearbyFont);
-    }
-
     function onLayout(dc as Dc) as Void {
         if (nearbyPage) {
             // Centre the title lower than the normal header, where a round
@@ -43,11 +38,10 @@ class BaseChristchurchBusView extends WatchUi.View {
             var width = dc.getWidth() * 70 / 100;
             var fonts = [Graphics.FONT_SYSTEM_SMALL, Graphics.FONT_SMALL,
                          Graphics.FONT_TINY, Graphics.FONT_XTINY];
-            titleDc = dc;
             nearbyTitleLines = [];
             for (var i = 0; i < fonts.size(); i++) {
                 nearbyFont = fonts[i] as Graphics.FontType;
-                var wrapped = NearbyStatusLayout.wrap(siteName, width, method(:measureNearbyTitle), 2);
+                var wrapped = NearbyStatusLayout.wrapDc(siteName, width, dc, nearbyFont, 2);
                 if (wrapped != null &&
                     (wrapped as Array).size() * dc.getFontHeight(nearbyFont) <= dc.getHeight() / 4) {
                     nearbyTitleLines = wrapped as Array<String>;
@@ -64,7 +58,6 @@ class BaseChristchurchBusView extends WatchUi.View {
                 nearbyTitleLines = [shortened + "..."];
             }
             nearbyLineHeight = dc.getFontHeight(nearbyFont) + Constants.VERTICAL_SPACE;
-            titleDc = null;
             return;
         }
         if (distanceSuffix != null) {

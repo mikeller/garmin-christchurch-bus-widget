@@ -69,6 +69,7 @@ class ChristchurchBusViewManager {
 
     (:nearby)
     private function initializeNearbyPages() as Void {
+        ChristchurchBusDataCache.discardInvalidNearbyResult();
         rebuildPages();
     }
 
