@@ -54,3 +54,50 @@ function testNearbySlotPageOrder(logger as Logger) as Boolean {
         "one favourite before slot");
     return true;
 }
+
+(:test, :nearby)
+function testSingleFavouriteSlotAndSelect(logger as Logger) as Boolean {
+    var favourite = [3003] as Array<Number>;
+    var counts = [0, 1, 3] as Array<Number>;
+    for (var before = 0; before <= 2; before++) {
+        var locating = NearbyPageOrder.build(favourite, [] as Array, [] as Array,
+            before, NearbyPageOrder.LOCATING);
+        Test.assertEqualMessage(2, locating.size(), "one favourite and one locating slot");
+        var first = NearbyPageOrder.initialIndex(locating, 1, before);
+        Test.assertEqualMessage(before == 0 ? 1 : 0, first, "open on favourite");
+        Test.assertEqualMessage(3003, (locating[first] as Array)[NearbyStopMaths.PAGE_CODE],
+            "favourite not dropped while locating");
+        Test.assertEqualMessage(1 - first, NearbyPageOrder.nextIndex(first, 2),
+            "Select opens slot");
+        Test.assertEqualMessage(first, NearbyPageOrder.nextIndex(1 - first, 2),
+            "Select wraps back to favourite");
+        for (var i = 0; i < counts.size(); i++) {
+            var n = counts[i];
+            var split = NearbyStopMaths.nearestSplit(NearbyStopMathsTestData.vectorStops(),
+                -4353000, 17263000, favourite, n);
+            var ordered = NearbyPageOrder.build(favourite, split[0] as Array,
+                split[1] as Array, before,
+                n == 0 ? NearbyPageOrder.EMPTY : NearbyPageOrder.READY);
+            var expectedSize = n == 0 ? 2 : n + 1;
+            Test.assertEqualMessage(expectedSize, ordered.size(), "nearby plus favourite");
+            var selected = NearbyPageOrder.selectedIndex(ordered, 3003, first, first);
+            Test.assertEqualMessage(3003,
+                (ordered[selected] as Array)[NearbyStopMaths.PAGE_CODE],
+                "keep selected favourite when nearby pages arrive");
+            var next = selected;
+            for (var step = 0; step < expectedSize; step++) {
+                next = NearbyPageOrder.nextIndex(next, expectedSize);
+            }
+            Test.assertEqualMessage(selected, next, "Select cycles all pages and wraps");
+            if (n == 0) {
+                Test.assertMessage((ordered[selected] as Array)[NearbyStopMaths.PAGE_METRES] == null,
+                    "no distance without a tile");
+            } else {
+                Test.assertEqualMessage(111,
+                    (ordered[selected] as Array)[NearbyStopMaths.PAGE_METRES],
+                    "favourite among nearest");
+            }
+        }
+    }
+    return true;
+}

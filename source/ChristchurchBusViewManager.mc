@@ -3,6 +3,7 @@ import Toybox.Application;
 import Toybox.WatchUi;
 import Toybox.Time;
 import Toybox.Timer;
+import Toybox.System;
 
 class ChristchurchBusViewManager {
     private var reader as ChristchurchBusDataReader;
@@ -139,13 +140,55 @@ class ChristchurchBusViewManager {
         if (pages.size() == 0) {
             return;
         }
-        currentStopIndex = (currentStopIndex + 1) % pages.size();
+        var oldIndex = currentStopIndex;
+        currentStopIndex = nextPageIndex(currentStopIndex, pages.size());
+        logSelectDecision(oldIndex, currentStopIndex, pages.size());
         var selected = pages[currentStopIndex]["stopId"] as Number?;
         if (selected != null) {
             var firstFavourite = favourites.size() > 0 ? favourites[0]["stopId"] as Number : selected as Number;
             ChristchurchBusDataCache.setLastStop(selected as Number, firstFavourite);
         }
     }
+
+    (:nearby)
+    private function nextPageIndex(index as Number, count as Number) as Number {
+        return NearbyPageOrder.nextIndex(index, count);
+    }
+
+    (:noNearby)
+    private function nextPageIndex(index as Number, count as Number) as Number {
+        return (index + 1) % count;
+    }
+
+    (:nearby, :debug)
+    private function logSelectDecision(oldIndex as Number, newIndex as Number,
+                                       count as Number) as Void {
+        System.println("Nearby select: old=" + oldIndex + ", new=" + newIndex +
+            ", pages=" + count);
+    }
+
+    (:nearby, :release)
+    private function logSelectDecision(oldIndex as Number, newIndex as Number,
+                                       count as Number) as Void {}
+
+    (:noNearby)
+    private function logSelectDecision(oldIndex as Number, newIndex as Number,
+                                       count as Number) as Void {}
+
+    (:nearby, :debug)
+    private function logPageDecision() as Void {
+        System.println("Nearby pages: favourites=" + favourites.size() +
+            ", enabled=" + ChristchurchBusAppProperties.nearbyEnabled() +
+            ", count=" + ChristchurchBusAppProperties.nearbyStopsToShow() +
+            ", slot=" + slotState + ", pages=" + pages.size() +
+            ", index=" + currentStopIndex);
+    }
+
+    (:nearby, :release)
+    private function logPageDecision() as Void {}
+
+    (:noNearby)
+    private function logPageDecision() as Void {}
 
     function manualRefresh() as Void {
         refreshNearby(true);
@@ -328,6 +371,7 @@ class ChristchurchBusViewManager {
         pages = newPages;
         currentStopIndex = NearbyPageOrder.selectedIndex(ordered, selectedId, oldIndex,
             NearbyPageOrder.initialIndex(ordered, favourites.size(), before));
+        logPageDecision();
         if (pages.size() > 0) {
             displayBusesForCurrentStop();
         }

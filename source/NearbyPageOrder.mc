@@ -55,4 +55,8 @@ class NearbyPageOrder {
         }
         return fallback < ordered.size() ? fallback : 0;
     }
+
+    static function nextIndex(index as Number, count as Number) as Number {
+        return count == 0 ? 0 : (index + 1) % count;
+    }
 }
