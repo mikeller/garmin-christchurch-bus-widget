@@ -79,11 +79,9 @@ class NearbyLocation {
     }
 
     private function accept(info as Position.Info?) as Boolean {
-        if (info == null || info.position == null || info.accuracy < Position.QUALITY_POOR || info.when == null) {
-            return false;
-        }
-        var age = Time.now().subtract(info.when as Time.Moment).value();
-        if (age < 0 || age > 300) {
+        if (info == null || info.position == null || info.when == null ||
+            !NearbyLocationPolicy.accepts(info.accuracy, (info.when as Time.Moment).value(),
+                Time.now().value())) {
             return false;
         }
         var degrees = (info.position as Position.Location).toDegrees();
