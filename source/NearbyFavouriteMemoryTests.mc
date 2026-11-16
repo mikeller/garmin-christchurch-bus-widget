@@ -30,6 +30,18 @@ function testNearbyFavouriteMemory(logger as Logger) as Boolean {
         favourites, -1, 1000) == null, "unknown id");
     Test.assertEqualMessage(53185, NearbyFavouriteMemory.restore({"stopIndex" => 1},
         favourites, -1, 1000), "legacy index");
+    Test.assertEqualMessage(53185, NearbyFavouriteMemory.restore({"stopIndex" => 1l},
+        favourites, -1, 1000), "legacy Long index");
+    Test.assertMessage(NearbyFavouriteMemory.restore({"stopIndex" => 2l},
+        favourites, -1, 1000) == null, "Long index out of range");
+    Test.assertMessage(NearbyFavouriteMemory.restore({"stopIndex" => 0l},
+        [] as Array<Dictionary>, -1, 1000) == null, "empty favourites");
+    Test.assertMessage(NearbyFavouriteMemory.restore({"stopIndex" => 1l,
+        "resetTime" => 999}, favourites, 5, 1000) == null, "expired legacy Long");
+    Test.assertMessage(NearbyFavouriteMemory.restore({"stopIndex" => 1l},
+        favourites, 0, 1000) == null, "disabled legacy Long");
+    Test.assertMessage(NearbyFavouriteMemory.restore({"stopIndex" => 1l,
+        "resetTime" => "bad"}, favourites, -1, 1000) == null, "malformed legacy Long");
     var ordered = [[null, null, null, false], [52927, null, null, true],
                    [53000, null, null, false], [53185, null, null, true]] as Array;
     Test.assertEqualMessage(3, NearbyPageOrder.selectedIndex(ordered, 53185, -1, 1),
