@@ -45,6 +45,9 @@ class ChristchurchBusApp extends Application.AppBase {
     function onStop(state as Dictionary?) as Void {
         if (viewManager != null) {
             (viewManager as ChristchurchBusViewManager).stop();
+            // A later start may reuse this AppBase instance. Rebuild the
+            // manager so persisted selection and location are read again.
+            viewManager = null;
         }
         Utils.log("App Stopped.");
     }
