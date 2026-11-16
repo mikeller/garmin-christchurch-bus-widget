@@ -20,16 +20,17 @@ class NearbyLocation {
     private var fixAgeUnknown as Boolean = false;
     private var stale as Boolean = false;
     private var acquiring as Boolean = false;
+    private var acquisitionState as Number = NearbyAcquisitionState.IDLE;
     private var timeout as Timer.Timer = new Timer.Timer();
     private var callback as Method?;
     private var failureReason as Number = NearbyUnavailableReason.NO_FIX;
 
     function start(callback as Method) as Void {
+        stop();
         self.callback = callback;
         if (!ChristchurchBusAppProperties.nearbyEnabled()) {
             return;
         }
-        stop();
         var now = Time.now().value();
         var device = null as Dictionary?;
         var info = null as Position.Info?;
@@ -53,6 +54,7 @@ class NearbyLocation {
                 state = LOCATING;
             }
             acquiring = true;
+            acquisitionState = NearbyAcquisitionState.shown();
             try {
                 timeout.start(method(:onTimeout), ACQUISITION_TIMEOUT_MS, false);
                 Position.enableLocationEvents(Position.LOCATION_ONE_SHOT, method(:onLocation));
@@ -116,7 +118,9 @@ class NearbyLocation {
             disableEvents();
         }
         acquiring = false;
+        acquisitionState = NearbyAcquisitionState.afterHide(acquisitionState);
         state = IDLE;
+        callback = null;
     }
 
     function getState() as Number {
@@ -161,11 +165,15 @@ class NearbyLocation {
         if (acquiring) {
             try {
                 if (accept(info)) {
-                    if (stale || info.accuracy < Position.QUALITY_POOR) {
-                        notify();
-                    } else {
-                        finish(true);
-                    }
+                    acquisitionState = NearbyAcquisitionState.received(acquisitionState);
+                    // A one-shot position has been delivered. Do not keep
+                    // GPS enabled, even when its timestamp is old.
+                    finish(true);
+                } else if (info != null && info.position != null &&
+                           info.accuracy >= Position.QUALITY_LAST_KNOWN) {
+                    // A one-shot callback has fired, but its position was
+                    // older than our stored fix. Keep the newer fix.
+                    finish(false);
                 }
             } catch (e) {
                 failureReason = NearbyUnavailableReason.LOCATION_ERROR;
@@ -176,7 +184,13 @@ class NearbyLocation {
 
     function onTimeout() as Void {
         if (acquiring) {
-            finish(false);
+            acquisitionState = NearbyAcquisitionState.timedOut(acquisitionState);
+            if (state != FIX) {
+                state = NO_FIX;
+                failureReason = NearbyUnavailableReason.NO_FIX;
+                notify();
+            }
+            // Keep the one-shot listener registered until a fix or hide/stop.
         }
     }
 
@@ -184,6 +198,8 @@ class NearbyLocation {
         timeout.stop();
         disableEvents();
         acquiring = false;
+        acquisitionState = hasFix ? NearbyAcquisitionState.received(acquisitionState) :
+            NearbyAcquisitionState.afterHide(acquisitionState);
         if (!hasFix && state != FIX) {
             state = NO_FIX;
         }

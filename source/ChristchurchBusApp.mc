@@ -51,6 +51,20 @@ class ChristchurchBusApp extends Application.AppBase {
         }
         Utils.log("App Stopped.");
     }
+
+    (:nearby)
+    function nearbyViewHidden(view as WatchUi.View) as Void {
+        if (viewManager != null) {
+            (viewManager as ChristchurchBusViewManager).viewHidden(view);
+        }
+    }
+
+    (:nearby)
+    function nearbyViewShown(view as WatchUi.View) as Void {
+        if (viewManager != null) {
+            (viewManager as ChristchurchBusViewManager).viewShown(view);
+        }
+    }
 }
 
 function getApp() as ChristchurchBusApp {

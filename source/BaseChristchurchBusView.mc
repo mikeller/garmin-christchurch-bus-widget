@@ -39,6 +39,14 @@ class BaseChristchurchBusView extends WatchUi.View {
         staleNearbyPosition = stale;
     }
 
+    function onHide() as Void {
+        getApp().nearbyViewHidden(self);
+    }
+
+    function onShow() as Void {
+        getApp().nearbyViewShown(self);
+    }
+
     function onLayout(dc as Dc) as Void {
         if (nearbyPage) {
             nearbyStartY = dc.getHeight() / 4;

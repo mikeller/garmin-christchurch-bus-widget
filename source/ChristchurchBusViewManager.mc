@@ -92,6 +92,21 @@ class ChristchurchBusViewManager {
         }
     }
 
+    function viewHidden(view as WatchUi.View) as Void {
+        // Page switches replace currentView before the previous page hides.
+        // Only hiding the current page means that the widget left the screen.
+        if (view == currentView && nearbyLocation != null) {
+            (nearbyLocation as NearbyLocation).stop();
+        }
+    }
+
+    function viewShown(view as WatchUi.View) as Void {
+        if (view == currentView && nearbyLocation != null &&
+            (nearbyLocation as NearbyLocation).getState() == NearbyLocation.IDLE) {
+            (nearbyLocation as NearbyLocation).start(method(:onNearbyLocation));
+        }
+    }
+
     private function switchView() as Void {
         if (started) {
             WatchUi.switchToView(currentView, behaviourDelegate, WatchUi.SLIDE_IMMEDIATE);
@@ -259,7 +274,9 @@ class ChristchurchBusViewManager {
     (:nearby)
     function onNearbyLocation() as Void {
         if (nearbyLocation != null && (nearbyLocation as NearbyLocation).getState() == NearbyLocation.FIX) {
-            if (slotState == NearbyPageOrder.LOCATING) {
+            if (slotState == NearbyPageOrder.LOCATING ||
+                slotState == NearbyPageOrder.UNAVAILABLE ||
+                slotState == NearbyPageOrder.EMPTY) {
                 slotState = NearbyPageOrder.WAITING_TILE;
                 rebuildPages();
             }
@@ -493,6 +510,8 @@ class ChristchurchBusViewManager {
             slotState == NearbyPageOrder.EMPTY ? Rez.Strings.NoStopsNearby : Rez.Strings.NearbyUnavailable;
         var hint = slotState == NearbyPageOrder.UNAVAILABLE ?
             NearbyUnavailableReason.hint(slotReason, slotCode) :
+            slotState == NearbyPageOrder.LOCATING ?
+                WatchUi.loadResource(Rez.Strings.NearbyWaitingHint) as String :
             slotState == NearbyPageOrder.EMPTY && slotCode == -400 ?
                 NearbyUnavailableReason.hint(NearbyUnavailableReason.TILE_CODE, slotCode) : null;
         var status = new NearbyStatusView(WatchUi.loadResource(title) as String, hint);
