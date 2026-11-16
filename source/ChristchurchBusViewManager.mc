@@ -43,16 +43,7 @@ class ChristchurchBusViewManager {
         for (var i = 0; i < favourites.size(); i++) {
             pages.add(favourites[i]);
         }
-        var lastId = ChristchurchBusDataCache.getLastStop(favourites);
-        savedStopId = lastId;
-        if (lastId != null) {
-            for (var i = 0; i < pages.size(); i++) {
-                if (pages[i]["stopId"] == lastId) {
-                    currentStopIndex = i;
-                    break;
-                }
-            }
-        }
+        savedStopId = ChristchurchBusDataCache.getLastFavourite(favourites);
         reader = new ChristchurchBusDataReader();
         behaviourDelegate = new ChristchurchBusBehaviorDelegate(method(:manualRefresh), method(:nextStop));
         currentView = new BaseChristchurchBusView(currentPageTitle, false, null, null);
@@ -149,10 +140,13 @@ class ChristchurchBusViewManager {
         var oldIndex = currentStopIndex;
         currentStopIndex = nextPageIndex(currentStopIndex, pages.size());
         logSelectDecision(oldIndex, currentStopIndex, pages.size());
-        var selected = pages[currentStopIndex]["stopId"] as Number?;
+        var selected = NearbyFavouriteMemory.selectedFavourite(pages[currentStopIndex], favourites);
         if (selected != null) {
-            var firstFavourite = favourites.size() > 0 ? favourites[0]["stopId"] as Number : selected as Number;
-            ChristchurchBusDataCache.setLastStop(selected as Number, firstFavourite);
+            ChristchurchBusDataCache.setLastStop(selected as Number,
+                favourites[0]["stopId"] as Number);
+        } else {
+            // A nearby-only page (or status slot) is not a remembered favourite.
+            ChristchurchBusDataCache.clearLastStop();
         }
     }
 
@@ -348,8 +342,9 @@ class ChristchurchBusViewManager {
 
     (:nearby)
     private function rebuildPages() as Void {
-        var selectedId = pages.size() > 0 ? pages[currentStopIndex]["stopId"] as Number? : savedStopId;
-        var oldIndex = pages.size() > 0 ? currentStopIndex : -1;
+        var selectedId = savedStopId != null ? savedStopId :
+            pages.size() > 0 ? pages[currentStopIndex]["stopId"] as Number? : null;
+        var oldIndex = savedStopId != null ? -1 : pages.size() > 0 ? currentStopIndex : -1;
         savedStopId = null;
         var codes = [] as Array<Number>;
         for (var i = 0; i < favourites.size(); i++) {

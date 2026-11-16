@@ -77,8 +77,16 @@ class ChristchurchBusDataCache {
         Utils.log("Reset last stop index.");
     }
 
+    (:nearby)
+    static function clearLastStop() as Void {
+        Storage.deleteValue(Constants.LAST_STOP_INDEX_NAME);
+    }
+
     static function getLastStop(favourites as Array<Dictionary>) as Number? {
         var stored = Storage.getValue(Constants.LAST_STOP_INDEX_NAME);
+        if (ChristchurchBusAppProperties.getStopResetTimeMin() == 0) {
+            return null;
+        }
         if (stored != null && !StoredBusData.validLastStop(stored, favourites)) {
             Storage.deleteValue(Constants.LAST_STOP_INDEX_NAME);
             return null;
@@ -91,7 +99,7 @@ class ChristchurchBusDataCache {
                 resetTime = new Time.Moment(resetTimeValue);
             }
 
-            if (resetTime == null || !resetTime.lessThan(Time.now())) {
+            if (resetTime == null || resetTimeValue > Time.now().value()) {
                 var stopId = lastStopValue["stopId"] as Number?;
                 if (stopId == null) {
                     var oldIndex = lastStopValue["stopIndex"] as Number?;
@@ -112,6 +120,18 @@ class ChristchurchBusDataCache {
         }
 
         return null;
+    }
+
+    (:nearby)
+    static function getLastFavourite(favourites as Array<Dictionary>) as Number? {
+        var stored = Storage.getValue(Constants.LAST_STOP_INDEX_NAME);
+        var record = stored instanceof Dictionary ? stored as Dictionary : null;
+        var id = NearbyFavouriteMemory.restore(record, favourites,
+            ChristchurchBusAppProperties.getStopResetTimeMin(), Time.now().value());
+        if (stored != null && id == null) {
+            Storage.deleteValue(Constants.LAST_STOP_INDEX_NAME);
+        }
+        return id;
     }
 
     (:nearby)
