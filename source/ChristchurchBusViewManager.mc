@@ -7,6 +7,7 @@ import Toybox.System;
 
 (:nearby)
 class ChristchurchBusViewManager {
+    private static const DEPARTURE_TIMEOUT_S = 15;
     private var reader as ChristchurchBusDataReader;
     private var behaviourDelegate as WatchUi.BehaviorDelegate;
     private var currentView as WatchUi.View;
@@ -18,6 +19,7 @@ class ChristchurchBusViewManager {
     private var currentStopIndex as Number = 0;
     private var savedStopId as Number?;
     private var lastRequestAt as Dictionary<Number, Number> = {} as Dictionary<Number, Number>;
+    private var updateFailed as Dictionary<Number, Boolean> = {} as Dictionary<Number, Boolean>;
     private var requestsThisCycle as Number = 0;
     private var cycleStartedAt as Number = -1;
     private var started as Boolean = false;
@@ -412,7 +414,7 @@ class ChristchurchBusViewManager {
             NearbyPageNames.favouriteTitle(name, id, cachedRows,
                 WatchUi.loadResource(Rez.Strings.StopCodeFallback) as String);
         currentDistance = distanceForStop(stop);
-        var view = new BaseChristchurchBusView(currentPageTitle, false, codeSubtitle(stop),
+        var view = new BaseChristchurchBusView(currentPageTitle, updateFailed[id] == true, codeSubtitle(stop),
             pageDistanceSuffix(stop));
         view.setStaleNearbyPosition(stalePosition());
         if (isNearbyPage(stop) || currentTitleFromTile) {
@@ -602,12 +604,15 @@ class ChristchurchBusViewManager {
 
     function onBusDataReady(data as Dictionary<String, String or Array>?, handle as Number,
                              requestIsCompleted as Boolean, dataIsStale as Boolean) as Void {
+        updateFailed[handle] = NearbyDepartureState.failed(updateFailed[handle] == true,
+            requestIsCompleted, dataIsStale, false);
         if (pages.size() > 0 && handle == pages[currentStopIndex]["stopId"]) {
             var stop = pages[currentStopIndex];
             var subtitle = codeSubtitle(stop);
             var suffix = pageDistanceSuffix(stop);
             if (data == null) {
-                var base = new BaseChristchurchBusView(currentPageTitle, dataIsStale, subtitle, suffix);
+                var base = new BaseChristchurchBusView(currentPageTitle,
+                    updateFailed[handle] == true, subtitle, suffix);
                 base.setStaleNearbyPosition(stalePosition());
                 if (isNearbyPage(stop) || currentTitleFromTile) {
                     base.setNearbyPage();
@@ -615,7 +620,7 @@ class ChristchurchBusViewManager {
                 currentView = base;
             } else {
                 var departures = new ChristchurchBusView(data as Dictionary<String, String or Array>,
-                    currentPageTitle, dataIsStale, subtitle, suffix);
+                    currentPageTitle, updateFailed[handle] == true, subtitle, suffix);
                 departures.setStaleNearbyPosition(stalePosition());
                 if (isNearbyPage(stop) || currentTitleFromTile) {
                     departures.setNearbyPage();
@@ -632,12 +637,28 @@ class ChristchurchBusViewManager {
     private function requestDelayedRefresh() as Void {
         if (!delayedRefreshRequested) {
             delayedRefreshRequested = true;
-            refreshTimer.start(method(:onDelayedRefresh), Constants.REFRESH_DELAY_S * 1000, false);
+            var visible = pages.size() > 0 ? pages[currentStopIndex]["stopId"] as Number? : null;
+            var delay = visible != null && reader.isRunning(visible as Number) ?
+                5000 : Constants.REFRESH_DELAY_S * 1000;
+            refreshTimer.start(method(:onDelayedRefresh), delay, false);
         }
     }
 
     function onDelayedRefresh() as Void {
         delayedRefreshRequested = false;
+        if (pages.size() > 0) {
+            var id = pages[currentStopIndex]["stopId"] as Number?;
+            if (id != null && reader.isRunning(id as Number)) {
+                var sent = lastRequestAt[id as Number] as Number?;
+                if (sent != null && Time.now().value() >= sent as Number &&
+                    Time.now().value() - (sent as Number) >= DEPARTURE_TIMEOUT_S &&
+                    updateFailed[id as Number] != true) {
+                    updateFailed[id as Number] = true;
+                    onBusDataReady(ChristchurchBusDataCache.tryGetCachedData(id as Number, true),
+                        id as Number, false, true);
+                }
+            }
+        }
         refreshNearby(false);
         refreshBusStopCache(currentStopIndex);
     }
