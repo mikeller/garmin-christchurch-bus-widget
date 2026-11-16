@@ -30,7 +30,9 @@ class ChristchurchBusViewManager {
     (:nearby) private var fixAt as Number = 0;
     (:nearby) private var nearbyStatus as String?;
     (:nearby) private var slotState as Number = NearbyPageOrder.LOCATING;
-    (:nearby) private var slotTileError as Boolean = false;
+    (:nearby) private var slotReason as Number = NearbyUnavailableReason.NO_FIX;
+    (:nearby) private var slotCode as Number = 0;
+    (:nearby) private var tileRetryAt as Number = 0;
     (:nearby) private var tileLat as Number?;
     (:nearby) private var tileLon as Number?;
     private var retryTimer as Timer.Timer = new Timer.Timer();
@@ -205,6 +207,9 @@ class ChristchurchBusViewManager {
         if (nearbyLocation == null) {
             return;
         }
+        if (!force && Time.now().value() < tileRetryAt) {
+            return;
+        }
         (nearbyLocation as NearbyLocation).refresh();
         if (tileReader.isPending()) {
             var pendingCoords = (nearbyLocation as NearbyLocation).getCoordinates();
@@ -264,7 +269,7 @@ class ChristchurchBusViewManager {
         } else {
             clearNearby();
             slotState = NearbyPageOrder.UNAVAILABLE;
-            slotTileError = false;
+            slotReason = (nearbyLocation as NearbyLocation).getFailureReason();
             setNearbyStatus(WatchUi.loadResource(Rez.Strings.NearbyUnavailable) as String);
             rebuildPages();
         }
@@ -309,16 +314,22 @@ class ChristchurchBusViewManager {
             clearNearby();
             if (result == ChristchurchBusTileReader.NO_STOPS) {
                 slotState = NearbyPageOrder.EMPTY;
+                slotCode = tileReader.getFailureCode();
             } else {
                 slotState = NearbyPageOrder.UNAVAILABLE;
-                slotTileError = true;
+                slotCode = tileReader.getFailureCode();
+                slotReason = NearbyUnavailableReason.forTile(slotCode,
+                    false);
             }
+            tileRetryAt = Time.now().value() + 30;
             rebuildPages();
+            requestDelayedRefresh();
             return;
         }
         if (stops.size() == 0) {
             clearNearby();
             slotState = NearbyPageOrder.EMPTY;
+            slotCode = 0;
             rebuildPages();
             return;
         }
@@ -330,6 +341,8 @@ class ChristchurchBusViewManager {
             codes, ChristchurchBusAppProperties.nearbyStopsToShow());
         nearbyEntries = split[0] as Array;
         slotState = nearbyEntries.size() == 0 ? NearbyPageOrder.EMPTY : NearbyPageOrder.READY;
+        slotCode = 0;
+        tileRetryAt = 0;
         setNearbyStatus(null);
         favouriteEntries = stale ? [] as Array : split[1] as Array;
         fixAt = (nearbyLocation as NearbyLocation).getFixTime();
@@ -478,8 +491,9 @@ class ChristchurchBusViewManager {
         var title = slotState == NearbyPageOrder.LOCATING ? Rez.Strings.Locating :
             slotState == NearbyPageOrder.EMPTY ? Rez.Strings.NoStopsNearby : Rez.Strings.NearbyUnavailable;
         var hint = slotState == NearbyPageOrder.UNAVAILABLE ?
-            WatchUi.loadResource(slotTileError ? Rez.Strings.NearbyTileHint :
-                Rez.Strings.NearbyLocationHint) as String : null;
+            NearbyUnavailableReason.hint(slotReason, slotCode) :
+            slotState == NearbyPageOrder.EMPTY && slotCode == -400 ?
+                NearbyUnavailableReason.hint(NearbyUnavailableReason.TILE_CODE, slotCode) : null;
         var status = new NearbyStatusView(WatchUi.loadResource(title) as String, hint);
         status.setStaleNearbyPosition(stalePosition());
         currentView = status;

@@ -21,6 +21,11 @@ class ChristchurchBusTileReader {
     private var pendingKey as String?;
     private var pendingCallback as Method?;
     private var indexKey as String = INDEX_KEY;
+    private var failureCode as Number = 0;
+
+    function getFailureCode() as Number {
+        return failureCode;
+    }
 
     (:debug)
     function useTestIndex() as Void {
@@ -96,6 +101,7 @@ class ChristchurchBusTileReader {
             return true;
         }
         if (!System.getDeviceSettings().connectionAvailable) {
+            failureCode = -104;
             deliverOffline(key, callback);
             return true;
         }
@@ -127,6 +133,7 @@ class ChristchurchBusTileReader {
             pendingKey = null;
             pendingCallback = null;
             NearbyRequestSlots.release();
+            failureCode = -1;
             callback.invoke(UNAVAILABLE, null, false);
         }
         return true;
@@ -143,6 +150,7 @@ class ChristchurchBusTileReader {
             return;
         }
         NearbyRequestSlots.release();
+        failureCode = responseCode;
         var result = resultFor(responseCode, body);
         if (result == READY) {
             var tile = body as Dictionary;

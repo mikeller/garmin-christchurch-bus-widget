@@ -23,6 +23,10 @@
     <string id="StopCodeFallback">Stop $1$</string>
     <string id="NearbyLocationHint">Check location; reopen outdoors</string>
     <string id="NearbyTileHint">Check connection; retry</string>
+    <string id="NearbyNoFixHint">Location: no fix</string>
+    <string id="NearbyLocationErrorHint">Location: perm?</string>
+    <string id="NearbyBadTileHint">Tile: bad data</string>
+    <string id="NearbyTileCodeHint">Tile: </string>
     <string id="ConfigureStopsHint">Configure stops in settings</string>
 
     <string id="NoStops" scope="glance">No stops!</string>

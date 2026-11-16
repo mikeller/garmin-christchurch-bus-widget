@@ -7,6 +7,7 @@ import Toybox.System;
 // Widget-only acquisition; no location request is made from the glance.
 (:nearby)
 class NearbyLocation {
+    static const ACQUISITION_TIMEOUT_MS = 60000;
     static const IDLE = 0;
     static const LOCATING = 1;
     static const FIX = 2;
@@ -21,6 +22,7 @@ class NearbyLocation {
     private var acquiring as Boolean = false;
     private var timeout as Timer.Timer = new Timer.Timer();
     private var callback as Method?;
+    private var failureReason as Number = NearbyUnavailableReason.NO_FIX;
 
     function start(callback as Method) as Void {
         self.callback = callback;
@@ -40,10 +42,13 @@ class NearbyLocation {
                     state = LOCATING;
                 }
                 acquiring = true;
-                timeout.start(method(:onTimeout), 30000, false);
+                timeout.start(method(:onTimeout), ACQUISITION_TIMEOUT_MS, false);
                 Position.enableLocationEvents(Position.LOCATION_ONE_SHOT, method(:onLocation));
             }
         } catch (e) {
+            // The API does not expose a permission-denied status here. An
+            // exception is only a suspected permission/configuration failure.
+            failureReason = NearbyUnavailableReason.LOCATION_ERROR;
             finish(false);
         }
     }
@@ -59,6 +64,10 @@ class NearbyLocation {
 
     function getState() as Number {
         return state;
+    }
+
+    function getFailureReason() as Number {
+        return failureReason;
     }
 
     function getCoordinates() as Array<Number>? {
@@ -120,12 +129,17 @@ class NearbyLocation {
 
     function onLocation(info as Position.Info) as Void {
         if (acquiring) {
-            if (accept(info)) {
-                if (stale || info.accuracy < Position.QUALITY_POOR) {
-                    notify();
-                } else {
-                    finish(true);
+            try {
+                if (accept(info)) {
+                    if (stale || info.accuracy < Position.QUALITY_POOR) {
+                        notify();
+                    } else {
+                        finish(true);
+                    }
                 }
+            } catch (e) {
+                failureReason = NearbyUnavailableReason.LOCATION_ERROR;
+                finish(false);
             }
         }
     }
