@@ -30,27 +30,84 @@ class NearbyLocation {
             return;
         }
         stop();
-        // Publish any usable last position before starting a one-shot search.
+        var now = Time.now().value();
+        var device = null as Dictionary?;
+        var info = null as Position.Info?;
         try {
-            var info = Position.getInfo();
-            var usable = accept(info);
-            if (usable) {
-                notify();
+            info = Position.getInfo();
+            device = fromInfo(info, now);
+        } catch (e) {
+            failureReason = NearbyUnavailableReason.LOCATION_ERROR;
+        }
+        var chosen = NearbyStoredFix.choose(device, NearbyStoredFix.read(now), now);
+        if (chosen != null) {
+            applyFix(chosen as Dictionary, now);
+            notify();
+        }
+        if (device != null && info != null && info.accuracy >= Position.QUALITY_POOR) {
+            NearbyStoredFix.save(device as Dictionary, now);
+        }
+        if (chosen == null || stale || info == null ||
+            info.accuracy < Position.QUALITY_POOR) {
+            if (chosen == null) {
+                state = LOCATING;
             }
-            if (!usable || stale || info.accuracy < Position.QUALITY_POOR) {
-                if (!usable) {
-                    state = LOCATING;
-                }
-                acquiring = true;
+            acquiring = true;
+            try {
                 timeout.start(method(:onTimeout), ACQUISITION_TIMEOUT_MS, false);
                 Position.enableLocationEvents(Position.LOCATION_ONE_SHOT, method(:onLocation));
+            } catch (e) {
+                failureReason = NearbyUnavailableReason.LOCATION_ERROR;
+                finish(false);
+            }
+        }
+    }
+
+    private function fromInfo(info as Position.Info?, now as Number) as Dictionary? {
+        if (info == null || info.position == null ||
+            info.accuracy < Position.QUALITY_LAST_KNOWN) {
+            return null;
+        }
+        var when = null as Number?;
+        try {
+            if (info.when != null) {
+                when = (info.when as Time.Moment).value();
             }
         } catch (e) {
-            // The API does not expose a permission-denied status here. An
-            // exception is only a suspected permission/configuration failure.
-            failureReason = NearbyUnavailableReason.LOCATION_ERROR;
-            finish(false);
+            // A missing or unreadable age still permits use of the position.
         }
+        var degrees = (info.position as Position.Location).toDegrees();
+        if ((degrees[0] as Double) < -90.0d || (degrees[0] as Double) > 90.0d ||
+            (degrees[1] as Double) < -180.0d || (degrees[1] as Double) > 180.0d) {
+            return null;
+        }
+        var candidate = {"v" => NearbyStoredFix.VERSION,
+            "lat" => NearbyStopMaths.toE5(degrees[0] as Double),
+            "lon" => NearbyStopMaths.toE5(degrees[1] as Double),
+            "at" => when == null ? now : when as Number,
+            "unknown" => when == null} as Dictionary;
+        return NearbyStoredFix.valid(candidate, now) ? candidate : null;
+    }
+
+    private function applyFix(fix as Dictionary, now as Number) as Void {
+        latE5 = fix["lat"] as Number;
+        lonE5 = fix["lon"] as Number;
+        fixTimestamp = fix["at"] as Number;
+        fixAgeUnknown = fix["unknown"] == true;
+        stale = fixAgeUnknown || now - fixTimestamp > NearbyLocationPolicy.NEARBY_STALE_FIX_SEC;
+        state = FIX;
+        logFix(fixAgeUnknown ? -1 : now - fixTimestamp, stale);
+    }
+
+    private function accept(info as Position.Info?) as Boolean {
+        var now = Time.now().value();
+        var fix = fromInfo(info, now);
+        if (fix == null || (state == FIX && (fix as Dictionary)["at"] < fixTimestamp)) {
+            return false;
+        }
+        applyFix(fix as Dictionary, now);
+        NearbyStoredFix.save(fix as Dictionary, now);
+        return true;
     }
 
     function stop() as Void {
@@ -99,33 +156,6 @@ class NearbyLocation {
         }
     }
 
-    private function accept(info as Position.Info?) as Boolean {
-        if (info == null || info.position == null) {
-            return false;
-        }
-        var timestamp = null as Number?;
-        try {
-            if (info.when != null) {
-                timestamp = (info.when as Time.Moment).value();
-            }
-        } catch (e) {
-            // Unreadable age still permits a last-known position.
-        }
-        var decision = NearbyLocationPolicy.decide(info.accuracy, timestamp, Time.now().value());
-        if (!decision[0] || (state == FIX && timestamp != null && !fixAgeUnknown &&
-            timestamp < fixTimestamp)) {
-            return false;
-        }
-        var degrees = (info.position as Position.Location).toDegrees();
-        latE5 = NearbyStopMaths.toE5(degrees[0] as Double);
-        lonE5 = NearbyStopMaths.toE5(degrees[1] as Double);
-        fixTimestamp = timestamp == null ? 0 : timestamp as Number;
-        fixAgeUnknown = timestamp == null;
-        stale = decision[1];
-        state = FIX;
-        logFix(fixAgeUnknown ? -1 : Time.now().value() - fixTimestamp, stale);
-        return true;
-    }
 
     function onLocation(info as Position.Info) as Void {
         if (acquiring) {

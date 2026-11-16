@@ -53,9 +53,10 @@ class ChristchurchBusViewManager {
         currentView = new BaseChristchurchBusView(currentPageTitle, false, null, null);
         if (ChristchurchBusAppProperties.nearbyEnabled()) {
             setNearbyStatus(WatchUi.loadResource(Rez.Strings.Locating) as String);
-            initializeNearbyPages();
             nearbyLocation = new NearbyLocation();
+            // Load the stored/getInfo fix before the first nearby page build.
             (nearbyLocation as NearbyLocation).start(method(:onNearbyLocation));
+            initializeNearbyPages();
         } else {
             // There is no rebuild when nearby is off; log the single-page
             // decision too, so debug runs can distinguish a disabled setting.
