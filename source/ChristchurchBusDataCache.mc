@@ -80,6 +80,7 @@ class ChristchurchBusDataCache {
     (:nearby)
     static function clearLastStop() as Void {
         Storage.deleteValue(Constants.LAST_STOP_INDEX_NAME);
+        NearbyLastStopTrace.cleared();
     }
 
     static function getLastStop(favourites as Array<Dictionary>) as Number? {
@@ -126,8 +127,10 @@ class ChristchurchBusDataCache {
     static function getLastFavourite(favourites as Array<Dictionary>) as Number? {
         var stored = Storage.getValue(Constants.LAST_STOP_INDEX_NAME);
         var record = stored instanceof Dictionary ? stored as Dictionary : null;
-        var id = NearbyFavouriteMemory.restore(record, favourites,
-            ChristchurchBusAppProperties.getStopResetTimeMin(), Time.now().value());
+        var setting = ChristchurchBusAppProperties.getStopResetTimeMin();
+        var now = Time.now().value();
+        NearbyLastStopTrace.restore(stored, favourites, setting, now);
+        var id = NearbyFavouriteMemory.restore(record, favourites, setting, now);
         if (stored != null && id == null) {
             Storage.deleteValue(Constants.LAST_STOP_INDEX_NAME);
         }

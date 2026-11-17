@@ -42,6 +42,30 @@ function testNearbyFavouriteMemory(logger as Logger) as Boolean {
         favourites, 0, 1000) == null, "disabled legacy Long");
     Test.assertMessage(NearbyFavouriteMemory.restore({"stopIndex" => 1l,
         "resetTime" => "bad"}, favourites, -1, 1000) == null, "malformed legacy Long");
+    Test.assertEqualMessage(NearbyFavouriteMemory.RESTORED,
+        NearbyFavouriteMemory.restoreReason({"stopId" => 53185}, favourites, 65, 1000),
+        "debug restored");
+    Test.assertEqualMessage(NearbyFavouriteMemory.EXPIRED,
+        NearbyFavouriteMemory.restoreReason({"stopId" => 53185, "resetTime" => 1000},
+            favourites, 65, 1000), "debug expired at boundary");
+    Test.assertEqualMessage(NearbyFavouriteMemory.NO_RECORD,
+        NearbyFavouriteMemory.restoreReason(null, favourites, 65, 1000),
+        "debug no record");
+    Test.assertEqualMessage(NearbyFavouriteMemory.OUT_OF_RANGE,
+        NearbyFavouriteMemory.restoreReason({"stopIndex" => 3}, favourites, 65, 1000),
+        "debug out of range");
+    Test.assertEqualMessage(NearbyFavouriteMemory.OUT_OF_RANGE,
+        NearbyFavouriteMemory.restoreReason({"stopId" => 99999}, favourites, 65, 1000),
+        "debug id not a favourite");
+    Test.assertEqualMessage(NearbyFavouriteMemory.INVALID,
+        NearbyFavouriteMemory.restoreReason({"stopId" => "bad"}, favourites, 65, 1000),
+        "debug malformed");
+    Test.assertEqualMessage(NearbyFavouriteMemory.INVALID,
+        NearbyFavouriteMemory.restoreReason({"stopId" => 2}, favourites, 65, 1000),
+        "debug malformed id");
+    Test.assertEqualMessage(NearbyFavouriteMemory.DISABLED,
+        NearbyFavouriteMemory.restoreReason({"stopId" => 53185}, favourites, 0, 1000),
+        "debug disabled");
     var ordered = [[null, null, null, false], [52927, null, null, true],
                    [53000, null, null, false], [53185, null, null, true]] as Array;
     Test.assertEqualMessage(3, NearbyPageOrder.selectedIndex(ordered, 53185, -1, 1),

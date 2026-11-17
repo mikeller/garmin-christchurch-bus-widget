@@ -165,6 +165,7 @@ class ChristchurchBusViewManager {
         if (selected != null) {
             ChristchurchBusDataCache.setLastStop(selected as Number,
                 favourites[0]["stopId"] as Number);
+            NearbyLastStopTrace.favourite();
         } else {
             // A nearby-only page (or status slot) is not a remembered favourite.
             ChristchurchBusDataCache.clearLastStop();
