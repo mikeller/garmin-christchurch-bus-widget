@@ -83,6 +83,18 @@ class ChristchurchBusDataCache {
         NearbyLastStopTrace.cleared();
     }
 
+    (:nearby)
+    static function rememberFavouritePage(page as Dictionary,
+                                          favourites as Array<Dictionary>) as Void {
+        var selected = NearbyFavouriteMemory.selectedFavourite(page, favourites);
+        if (selected != null) {
+            setLastStop(selected as Number, favourites[0]["stopId"] as Number);
+            NearbyLastStopTrace.favourite();
+        }
+        // A nearby-only page leaves the previous favourite (and expiry)
+        // intact. GlanceStop independently tracks the displayed stop.
+    }
+
     static function getLastStop(favourites as Array<Dictionary>) as Number? {
         var stored = Storage.getValue(Constants.LAST_STOP_INDEX_NAME);
         if (ChristchurchBusAppProperties.getStopResetTimeMin() == 0) {

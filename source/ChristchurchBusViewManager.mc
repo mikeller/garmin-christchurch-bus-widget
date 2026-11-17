@@ -161,15 +161,7 @@ class ChristchurchBusViewManager {
         var oldIndex = currentStopIndex;
         currentStopIndex = nextPageIndex(currentStopIndex, pages.size());
         logSelectDecision(oldIndex, currentStopIndex, pages.size());
-        var selected = NearbyFavouriteMemory.selectedFavourite(pages[currentStopIndex], favourites);
-        if (selected != null) {
-            ChristchurchBusDataCache.setLastStop(selected as Number,
-                favourites[0]["stopId"] as Number);
-            NearbyLastStopTrace.favourite();
-        } else {
-            // A nearby-only page (or status slot) is not a remembered favourite.
-            ChristchurchBusDataCache.clearLastStop();
-        }
+        ChristchurchBusDataCache.rememberFavouritePage(pages[currentStopIndex], favourites);
     }
 
     (:nearby)
