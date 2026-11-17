@@ -238,6 +238,15 @@ class ServiceProducerTests(unittest.TestCase):
             root = tile(base / "site")
             self.assertEqual(decode(root), {1001: [0]})
             self.assertEqual(root["i"], ["00", None, None])
+            self.assertEqual(root["p"], [])
+            for pickup in ("2", "3"):
+                fixture(base / "mixed.zip", {
+                    "stop_times": ("stop_id,trip_id,pickup_type\n"
+                                   "internal,t1,0\ninternal,t3,%s\nother,t1,0\n" % pickup)})
+                run(base / "mixed.zip", base / ("mixed" + pickup))
+                mixed = tile(base / ("mixed" + pickup))
+                self.assertEqual(decode(mixed), {1001: [0], 1002: [0]})
+                self.assertEqual(mixed["p"], [1001])
             fixture(base / "removed.zip", {
                 "calendar_dates": "service_id,date,exception_type\nexception,20261118,2\n"})
             run(base / "removed.zip", base / "removed")

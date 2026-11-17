@@ -45,6 +45,8 @@ Tile contract v1
   base36 digits per global index in strictly increasing order. Keys are
   numbered from exact UTF-8 route_id order, then direction_id 0/1; no
   dictionary is shipped. Unknown and partial rows must never be suppressed.
+  A stop is partial when it has unrestricted keys but also a restricted
+  (pickup_type 2 or 3) or unreadable visit; unknown when it has no key.
   The watch must validate all loaded candidate tiles' metadata, expiry,
   g/sh/K consistency before coverage, otherwise hide none for service
   redundancy while retaining the normal page count and favourite rules.

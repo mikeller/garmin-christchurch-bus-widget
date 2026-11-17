@@ -133,6 +133,10 @@ def build(path, stops, generation, existing_stops_h):
             pickup = row.get("pickup_type", "")
             if pickup not in ("", "0", "1", "2", "3"):
                 broken.add(sid)
+            elif pickup in ("2", "3"):
+                # Boardable only by arrangement: not an unrestricted key, but
+                # the stop's key set is then incomplete, so never suppress it.
+                broken.add(sid)
             elif pickup in ("", "0"):
                 keys[sid].add((trip["route_id"], int(trip["direction_id"])))
     states = {}
