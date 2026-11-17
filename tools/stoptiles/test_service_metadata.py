@@ -252,6 +252,27 @@ class ServiceProducerTests(unittest.TestCase):
             run(base / "removed.zip", base / "removed")
             self.assertEqual(decode(tile(base / "removed")), {1001: [0], 1002: [0]})
 
+    def test_writer_orders_members_once_for_stops_services_and_partials(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            fixture(base / "a.zip")
+            stops, _ = gt.load_stops(str(base / "a.zip"))
+            service = svc.build(str(base / "a.zip"), stops, DATE, gt.stops_hash(stops))
+            by_code = {stop.code: stop for stop in stops}
+            outputs = []
+            for name, order in (("sorted", (1001, 1002, 1003)),
+                                ("reversed", (1003, 1002, 1001))):
+                out = base / name
+                gt.write_output(str(out), {(0, 0): [by_code[c] for c in order]},
+                                {"h": service[2]}, DATE, service=service)
+                outputs.append((out / "t" / "0" / "0.json").read_bytes())
+            self.assertEqual(outputs[0], outputs[1])
+            root = json.loads(outputs[1])
+            self.assertEqual([row[0] for row in root["s"]], [1001, 1002, 1003])
+            self.assertEqual(decode(root), {1001: [0, 1], 1002: [1]})
+            self.assertEqual(root["i"], ["0001", "01", None])
+            self.assertEqual(root["p"], [1002])
+
     def test_cap_preflight_keeps_published_tree_and_exact_boundary(self):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)

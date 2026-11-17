@@ -301,6 +301,8 @@ def write_output(outdir, tiles, meta, date, static_dir=None, service=None):
             raise GeneratorError("service metadata requires 1..1296 usable global keys")
         numbering = {key: n for n, key in enumerate(global_keys)}
     for (ty, tx), members in tiles.items():
+        # One order for s (encode_tile sorts) and for i and p.
+        members = sorted(members)
         if service is not None and len(members) > 292:
             raise GeneratorError("tile %d/%d has more than 292 stops" % (ty, tx))
         metadata = (service_metadata.encode(members, states, numbering, digest)
