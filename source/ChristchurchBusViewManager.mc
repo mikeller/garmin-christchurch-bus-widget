@@ -35,6 +35,7 @@ class ChristchurchBusViewManager {
     (:nearby) private var tileRetryAt as Number = 0;
     (:nearby) private var tileLat as Number?;
     (:nearby) private var tileLon as Number?;
+    (:nearby) private var lastTileRequestAt as Number = -1;
     private var retryTimer as Timer.Timer = new Timer.Timer();
     private var retryIndex as Number = -1;
     private var refreshTimer as Timer.Timer = new Timer.Timer();
@@ -246,8 +247,8 @@ class ChristchurchBusViewManager {
         }
         var lat = coords[0];
         var lon = coords[1];
-        if (!force && tileLat != null && tileLon != null &&
-            !NearbyStopMaths.movedMoreThan(lat, lon, tileLat as Number, tileLon as Number, 100)) {
+        if (!force && !NearbyRefreshPolicy.shouldRefresh(lat, lon, tileLat, tileLon,
+            lastTileRequestAt, Time.now().value())) {
             return;
         }
         if (tileLat != null && tileLon != null &&
@@ -259,12 +260,13 @@ class ChristchurchBusViewManager {
                 displayBusesForCurrentStop();
             }
         }
-        // This session uses exactly one location acquisition. A manual refresh
-        // recomputes from that fix, but never starts a second Position listener.
+        // Location reacquisition is rate limited independently of tile reads.
         var tile = NearbyStopMaths.tileId(lat, lon);
         tileLat = lat;
         tileLon = lon;
-        if (!tileReader.getTile(tile[0], tile[1], method(:onTile))) {
+        if (tileReader.getTile(tile[0], tile[1], method(:onTile))) {
+            lastTileRequestAt = Time.now().value();
+        } else {
             tileLat = null;
             tileLon = null;
             requestDelayedRefresh();
@@ -280,9 +282,11 @@ class ChristchurchBusViewManager {
                 slotState = NearbyPageOrder.WAITING_TILE;
                 rebuildPages();
             }
-            refreshNearby(fixAt != (nearbyLocation as NearbyLocation).getFixTime());
-            if (pages.size() > 0) {
-                displayBusesForCurrentStop();
+            refreshNearby(fixAt == 0);
+            if (started) {
+                // The current view reads fix age while drawing. A fix within
+                // the same 100 m area need not recreate any pages or rows.
+                WatchUi.requestUpdate();
             }
         } else {
             clearNearby();
@@ -448,6 +452,7 @@ class ChristchurchBusViewManager {
         var view = new BaseChristchurchBusView(currentPageTitle, updateFailed[id] == true, codeSubtitle(stop),
             pageDistanceSuffix(stop));
         view.setStaleNearbyPosition(stalePosition());
+        view.setFixSource(nearbyLocation);
         if (isNearbyPage(stop) || currentTitleFromTile) {
             view.setNearbyPage();
         }
@@ -517,6 +522,7 @@ class ChristchurchBusViewManager {
                 NearbyUnavailableReason.hint(NearbyUnavailableReason.TILE_CODE, slotCode) : null;
         var status = new NearbyStatusView(WatchUi.loadResource(title) as String, hint);
         status.setStaleNearbyPosition(stalePosition());
+        status.setFixSource(nearbyLocation);
         currentView = status;
         switchView();
     }
@@ -562,7 +568,7 @@ class ChristchurchBusViewManager {
     (:nearby)
     private function distanceForStop(stop as Dictionary) as String? {
         var metres = stop["metres"] as Number?;
-        if (metres == null || nearbyLocation == null ||
+        if (metres == null || fixAt == 0 || nearbyLocation == null ||
             (nearbyLocation as NearbyLocation).getState() != NearbyLocation.FIX) {
             return null;
         }
@@ -649,6 +655,7 @@ class ChristchurchBusViewManager {
                 var base = new BaseChristchurchBusView(currentPageTitle,
                     updateFailed[handle] == true, subtitle, suffix);
                 base.setStaleNearbyPosition(stalePosition());
+                base.setFixSource(nearbyLocation);
                 if (isNearbyPage(stop) || currentTitleFromTile) {
                     base.setNearbyPage();
                 }
@@ -657,6 +664,7 @@ class ChristchurchBusViewManager {
                 var departures = new ChristchurchBusView(data as Dictionary<String, String or Array>,
                     currentPageTitle, updateFailed[handle] == true, subtitle, suffix);
                 departures.setStaleNearbyPosition(stalePosition());
+                departures.setFixSource(nearbyLocation);
                 if (isNearbyPage(stop) || currentTitleFromTile) {
                     departures.setNearbyPage();
                 }

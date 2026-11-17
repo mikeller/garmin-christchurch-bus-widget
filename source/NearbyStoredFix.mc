@@ -2,6 +2,7 @@ import Toybox.Lang;
 import Toybox.Application;
 import Toybox.Application.Storage;
 import Toybox.Time;
+import Toybox.Position;
 
 (:nearby)
 class NearbyStoredFix {
@@ -23,12 +24,16 @@ class NearbyStoredFix {
         var at = fix["at"] as Number;
         var savedAt = fix["savedAt"];
         var unknown = fix["unknown"];
+        var quality = fix["quality"];
         return lat >= -9000000 && lat <= 9000000 &&
             lon >= -18000000 && lon <= 18000000 &&
             at >= 0 && at <= now + 86400 &&
             (savedAt == null || (savedAt instanceof Number && savedAt >= 0 &&
                 savedAt <= now + 86400)) &&
-            (unknown == null || unknown instanceof Boolean);
+            (unknown == null || unknown instanceof Boolean) &&
+            (quality == null || (quality instanceof Number &&
+                quality >= Position.QUALITY_NOT_AVAILABLE &&
+                quality <= Position.QUALITY_GOOD));
     }
 
     static function choose(fromDevice as Dictionary?, stored as Dictionary?,
@@ -37,6 +42,13 @@ class NearbyStoredFix {
         var storedValid = valid(stored, now);
         if (!deviceValid) {
             return storedValid ? stored : null;
+        }
+        if (storedValid) {
+            var deviceUnknown = (fromDevice as Dictionary)["unknown"] == true;
+            var storedUnknown = (stored as Dictionary)["unknown"] == true;
+            if (deviceUnknown != storedUnknown) {
+                return deviceUnknown ? stored : fromDevice;
+            }
         }
         if (!storedValid || (fromDevice as Dictionary)["at"] >= (stored as Dictionary)["at"]) {
             return fromDevice;
@@ -53,6 +65,9 @@ class NearbyStoredFix {
             return true;
         }
         var old = previous as Dictionary;
+        if (candidate["unknown"] == true && old["unknown"] != true) {
+            return false;
+        }
         var lastWrite = old["savedAt"] instanceof Number ?
             old["savedAt"] as Number : old["at"] as Number;
         if (now < lastWrite || now - lastWrite < 60) {

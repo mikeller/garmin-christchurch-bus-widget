@@ -8,6 +8,7 @@ import Toybox.System;
 (:nearby)
 class NearbyLocation {
     static const ACQUISITION_TIMEOUT_MS = 60000;
+    static const REACQUIRE_DELAY_MS = 30000;
     static const IDLE = 0;
     static const LOCATING = 1;
     static const FIX = 2;
@@ -18,8 +19,10 @@ class NearbyLocation {
     private var lonE5 as Number?;
     private var fixTimestamp as Number = 0;
     private var fixAgeUnknown as Boolean = false;
+    private var fixQuality as Number = Position.QUALITY_NOT_AVAILABLE;
     private var stale as Boolean = false;
     private var acquiring as Boolean = false;
+    private var reacquirePending as Boolean = false;
     private var acquisitionState as Number = NearbyAcquisitionState.IDLE;
     private var timeout as Timer.Timer = new Timer.Timer();
     private var callback as Method?;
@@ -53,15 +56,32 @@ class NearbyLocation {
             if (chosen == null) {
                 state = LOCATING;
             }
-            acquiring = true;
-            acquisitionState = NearbyAcquisitionState.shown();
-            try {
-                timeout.start(method(:onTimeout), ACQUISITION_TIMEOUT_MS, false);
-                Position.enableLocationEvents(Position.LOCATION_ONE_SHOT, method(:onLocation));
-            } catch (e) {
-                failureReason = NearbyUnavailableReason.LOCATION_ERROR;
-                finish(false);
-            }
+            beginAcquisition();
+        } else {
+            scheduleReacquisition();
+        }
+    }
+
+    private function beginAcquisition() as Void {
+        if (callback == null) {
+            return;
+        }
+        reacquirePending = false;
+        acquiring = true;
+        acquisitionState = NearbyAcquisitionState.shown();
+        try {
+            timeout.start(method(:onTimeout), ACQUISITION_TIMEOUT_MS, false);
+            Position.enableLocationEvents(Position.LOCATION_ONE_SHOT, method(:onLocation));
+        } catch (e) {
+            failureReason = NearbyUnavailableReason.LOCATION_ERROR;
+            finish(false);
+        }
+    }
+
+    private function scheduleReacquisition() as Void {
+        if (callback != null && state != IDLE) {
+            reacquirePending = true;
+            timeout.start(method(:onTimeout), REACQUIRE_DELAY_MS, false);
         }
     }
 
@@ -87,7 +107,8 @@ class NearbyLocation {
             "lat" => NearbyStopMaths.toE5(degrees[0] as Double),
             "lon" => NearbyStopMaths.toE5(degrees[1] as Double),
             "at" => when == null ? now : when as Number,
-            "unknown" => when == null} as Dictionary;
+            "unknown" => when == null,
+            "quality" => info.accuracy} as Dictionary;
         return NearbyStoredFix.valid(candidate, now) ? candidate : null;
     }
 
@@ -96,7 +117,9 @@ class NearbyLocation {
         lonE5 = fix["lon"] as Number;
         fixTimestamp = fix["at"] as Number;
         fixAgeUnknown = fix["unknown"] == true;
-        stale = fixAgeUnknown || now - fixTimestamp > NearbyLocationPolicy.NEARBY_STALE_FIX_SEC;
+        fixQuality = fix["quality"] instanceof Number ?
+            fix["quality"] as Number : Position.QUALITY_LAST_KNOWN;
+        stale = staleAt(now);
         state = FIX;
         logFix(fixAgeUnknown ? -1 : now - fixTimestamp, stale);
     }
@@ -118,6 +141,7 @@ class NearbyLocation {
             disableEvents();
         }
         acquiring = false;
+        reacquirePending = false;
         acquisitionState = NearbyAcquisitionState.afterHide(acquisitionState);
         state = IDLE;
         callback = null;
@@ -143,8 +167,12 @@ class NearbyLocation {
     }
 
     function isStale() as Boolean {
-        return state == FIX && (fixAgeUnknown ||
-            Time.now().value() - fixTimestamp > NearbyLocationPolicy.NEARBY_STALE_FIX_SEC);
+        return state == FIX && staleAt(Time.now().value());
+    }
+
+    private function staleAt(now as Number) as Boolean {
+        return fixAgeUnknown || fixQuality <= Position.QUALITY_LAST_KNOWN ||
+            now - fixTimestamp > NearbyLocationPolicy.NEARBY_STALE_FIX_SEC;
     }
 
     // Re-read the last-known fix without enabling another location listener.
@@ -169,10 +197,9 @@ class NearbyLocation {
                     // A one-shot position has been delivered. Do not keep
                     // GPS enabled, even when its timestamp is old.
                     finish(true);
-                } else if (info != null && info.position != null &&
-                           info.accuracy >= Position.QUALITY_LAST_KNOWN) {
-                    // A one-shot callback has fired, but its position was
-                    // older than our stored fix. Keep the newer fix.
+                } else {
+                    // One-shot callbacks may also deliver an older or
+                    // unusable position. Never replace the newer fix.
                     finish(false);
                 }
             } catch (e) {
@@ -183,6 +210,10 @@ class NearbyLocation {
     }
 
     function onTimeout() as Void {
+        if (reacquirePending) {
+            beginAcquisition();
+            return;
+        }
         if (acquiring) {
             acquisitionState = NearbyAcquisitionState.timedOut(acquisitionState);
             if (state != FIX) {
@@ -206,6 +237,8 @@ class NearbyLocation {
         if (hasFix || state == NO_FIX) {
             notify();
         }
+        // The one-shot listener has completed; try again while visible.
+        scheduleReacquisition();
     }
 
     private function notify() as Void {

@@ -28,6 +28,16 @@ function testNearbyStoredFixPolicy(logger as Logger) as Boolean {
     Test.assertMessage(NearbyStoredFix.choose(null, null, now) == null, "both missing");
     var stale = {"v" => 1, "lat" => -4353100, "lon" => 17263700, "at" => 100};
     Test.assertMessage(NearbyStoredFix.choose(stale, old, now) == old, "both stale");
+    var unknown = {"v" => 1, "lat" => -4353100, "lon" => 17263700,
+                   "at" => now, "unknown" => true} as Dictionary;
+    Test.assertMessage(NearbyStoredFix.choose(unknown, old, now) == old,
+        "unknown age cannot override known older timestamp");
+    Test.assertMessage(NearbyStoredFix.choose(old, unknown, now) == old,
+        "known system fix beats unknown stored timestamp");
+    Test.assertMessage(!NearbyStoredFix.shouldWrite(old, unknown, now),
+        "unknown age cannot overwrite known fix");
+    Test.assertMessage(NearbyStoredFix.choose(latest, old, now) == latest,
+        "newer system fix wins over older stored fix");
     Test.assertMessage(!NearbyStoredFix.shouldWrite(old, latest, 9459), "minute limit");
     Test.assertMessage(NearbyStoredFix.shouldWrite(old, latest, now), "older than ten minutes");
     var moved = {"v" => 1, "lat" => -4352000, "lon" => 17263700, "at" => 9900};

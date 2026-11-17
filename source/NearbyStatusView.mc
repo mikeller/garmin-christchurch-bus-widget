@@ -68,6 +68,7 @@ class NearbyStatusView extends BaseChristchurchBusView {
     }
 
     function onUpdate(dc as Dc) as Void {
+        refreshFixAge();
         dc.setColor(Constants.COLOUR_FOREGROUND, Constants.COLOUR_BACKGROUND);
         dc.clear();
         drawNearbyFixIndicator(dc);

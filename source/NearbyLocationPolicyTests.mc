@@ -8,12 +8,14 @@ function testNearbyLocationPolicy(logger as Logger) as Boolean {
     var missing = NearbyLocationPolicy.decide(Position.QUALITY_NOT_AVAILABLE, now, now);
     Test.assertEqualMessage(false, missing[0], "no position");
     Test.assertEqualMessage(true, missing[2], "acquire without position");
-    var exact = NearbyLocationPolicy.decide(Position.QUALITY_GOOD, now - 600, now);
+    var exact = NearbyLocationPolicy.decide(Position.QUALITY_GOOD, now - 300, now);
     Test.assertEqualMessage(true, exact[0], "position at ten minutes usable");
-    Test.assertEqualMessage(false, exact[1], "exactly 600 seconds is recent");
+    Test.assertEqualMessage(false, exact[1], "exactly 300 seconds is recent");
     Test.assertEqualMessage(false, exact[2], "recent good fix needs no acquisition");
-    var old = NearbyLocationPolicy.decide(Position.QUALITY_GOOD, now - 601, now);
-    Test.assertEqualMessage(true, old[1], "601 seconds stale");
+    var almost = NearbyLocationPolicy.decide(Position.QUALITY_GOOD, now - 299, now);
+    Test.assertEqualMessage(false, almost[1], "299 seconds recent");
+    var old = NearbyLocationPolicy.decide(Position.QUALITY_GOOD, now - 301, now);
+    Test.assertEqualMessage(true, old[1], "301 seconds stale");
     Test.assertEqualMessage(true, old[2], "acquire new fix");
     var ancient = NearbyLocationPolicy.decide(Position.QUALITY_LAST_KNOWN, 1, now);
     Test.assertEqualMessage(true, ancient[0], "no hard age cap");
@@ -25,7 +27,11 @@ function testNearbyLocationPolicy(logger as Logger) as Boolean {
     var skew = NearbyLocationPolicy.decide(Position.QUALITY_GOOD, now + 1, now);
     Test.assertEqualMessage(false, skew[1], "negative age is recent");
     var lastKnown = NearbyLocationPolicy.decide(Position.QUALITY_LAST_KNOWN, now, now);
-    Test.assertEqualMessage(false, lastKnown[1], "recent last known not marked stale");
+    Test.assertEqualMessage(true, lastKnown[1], "last-known quality always stale");
+    Test.assertEqualMessage(false, NearbyLocationPolicy.decide(
+        Position.QUALITY_NOT_AVAILABLE, now, now)[0], "unavailable not usable");
+    Test.assertEqualMessage(true, NearbyLocationPolicy.decide(
+        Position.QUALITY_NOT_AVAILABLE, now, now)[1], "unavailable quality is stale");
     Test.assertEqualMessage(true, lastKnown[2], "last-known quality still needs fix");
     var poor = NearbyLocationPolicy.decide(Position.QUALITY_POOR, now, now);
     Test.assertEqualMessage(false, poor[2], "recent poor quality is enough");

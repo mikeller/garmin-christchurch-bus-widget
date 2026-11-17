@@ -14,6 +14,7 @@ class BaseChristchurchBusView extends WatchUi.View {
     protected var titleToDraw as String = "";
     protected var nearbyPage as Boolean = false;
     protected var staleNearbyPosition as Boolean = false;
+    protected var fixSource as NearbyLocation?;
     protected var nearbyTitleLines as Array<String> = [] as Array<String>;
     protected var nearbyFont as Graphics.FontType = Graphics.FONT_SYSTEM_SMALL;
     protected var nearbyLineHeight as Number = 0;
@@ -37,6 +38,16 @@ class BaseChristchurchBusView extends WatchUi.View {
 
     function setStaleNearbyPosition(stale as Boolean) as Void {
         staleNearbyPosition = stale;
+    }
+
+    function setFixSource(location as NearbyLocation?) as Void {
+        fixSource = location;
+    }
+
+    protected function refreshFixAge() as Void {
+        if (fixSource != null) {
+            staleNearbyPosition = (fixSource as NearbyLocation).isStale();
+        }
     }
 
     function onHide() as Void {
@@ -132,6 +143,7 @@ class BaseChristchurchBusView extends WatchUi.View {
     }
 
     function onUpdate(dc as Dc) as Void {
+        refreshFixAge();
         dc.setColor(Constants.COLOUR_FOREGROUND, Constants.COLOUR_BACKGROUND);
         dc.clear();
 
