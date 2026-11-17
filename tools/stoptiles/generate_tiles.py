@@ -84,6 +84,8 @@ import zipfile
 from collections import namedtuple
 from decimal import Context, Decimal, Inexact, ROUND_FLOOR
 
+from generator_error import GeneratorError
+
 GENERATOR_VERSION = 2
 TILE_FORMAT_VERSION = 1
 TILE_SIZE_E5 = 1000
@@ -109,10 +111,6 @@ Stop = namedtuple("Stop", ["code", "lat", "lon", "name"])
 SKIP_RULES = ("location_type", "stop_code", "stop_code_range", "coordinates")
 
 _DECIMAL_RE = re.compile(r"[+-]?(\d+\.?\d*|\.\d+)", re.ASCII)
-
-
-class GeneratorError(Exception):
-    """A condition that must fail the run with a clear message."""
 
 
 def to_e5(text):

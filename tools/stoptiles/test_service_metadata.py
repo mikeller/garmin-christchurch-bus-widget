@@ -2,6 +2,8 @@
 import hashlib
 import io
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -182,6 +184,21 @@ class ServiceProducerTests(unittest.TestCase):
                                  "a,1001,-43.5,172.6\n")
             with self.assertRaisesRegex(gt.GeneratorError, "requires routes.txt"):
                 run(base / "short.zip", base / "short")
+
+    def test_script_reports_feed_errors_without_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            with zipfile.ZipFile(base / "short.zip", "w") as archive:
+                archive.writestr("stops.txt", "stop_id,stop_code,stop_lat,stop_lon\n"
+                                 "a,1001,-43.5,172.6\n")
+            result = subprocess.run(
+                [sys.executable, str(HERE / "generate_tiles.py"), str(base / "short.zip"),
+                 str(base / "out"), "--service-metadata"],
+                capture_output=True, text=True, check=False)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stderr,
+                             "error: --service-metadata requires routes.txt\n")
+            self.assertFalse((base / "out").exists())
 
     def test_no_usable_keys_and_too_many_global_keys_fail(self):
         with tempfile.TemporaryDirectory() as tmp:

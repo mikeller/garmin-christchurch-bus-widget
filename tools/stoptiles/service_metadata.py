@@ -9,7 +9,8 @@ import re
 import zipfile
 from collections import defaultdict
 
-from generate_tiles import GeneratorError, _dumps, _parse_int
+from generate_tiles import _dumps, _parse_int
+from generator_error import GeneratorError
 
 ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz"
 REQUIRED = ("stops", "routes", "trips", "stop_times", "calendar", "calendar_dates",
