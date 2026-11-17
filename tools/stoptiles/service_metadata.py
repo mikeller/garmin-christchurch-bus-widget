@@ -54,8 +54,9 @@ def _calendar(archive, generation):
         raise GeneratorError("feed_info.txt must declare one horizon")
     start = _date(info[0].get("feed_start_date"))
     end = _date(info[0].get("feed_end_date"))
-    if end < start or generation > end:
-        raise GeneratorError("invalid or expired GTFS feed horizon")
+    if end < start or not start <= generation <= end:
+        raise GeneratorError(
+            "GTFS feed horizon is invalid or does not include the generation date")
     if (end - start).days > 3660:
         raise GeneratorError("GTFS feed horizon exceeds ten years")
     calendar = _unique(_rows(archive, "calendar"), "service_id")

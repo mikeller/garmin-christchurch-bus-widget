@@ -175,8 +175,14 @@ class ServiceProducerTests(unittest.TestCase):
                         run(base / "bad.zip", out)
                     self.assertFalse(out.exists())
             fixture(base / "valid.zip")
-            with self.assertRaisesRegex(gt.GeneratorError, "expired"):
-                run(base / "valid.zip", base / "expired", "2026-12-01")
+            for date in ("2026-10-31", "2026-12-01"):
+                with self.subTest(date=date):
+                    with self.assertRaisesRegex(gt.GeneratorError, "does not include"):
+                        run(base / "valid.zip", base / ("outside" + date), date)
+                    self.assertFalse((base / ("outside" + date)).exists())
+            for date in ("2026-11-01", "2026-11-30"):
+                with self.subTest(date=date):
+                    run(base / "valid.zip", base / ("edge" + date), date)
             with self.assertRaisesRegex(gt.GeneratorError, "requires a GTFS zip"):
                 run(HERE / "fixtures" / "stops_sample.txt", base / "plain")
             with zipfile.ZipFile(base / "short.zip", "w") as archive:
