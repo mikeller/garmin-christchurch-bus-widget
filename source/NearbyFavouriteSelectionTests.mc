@@ -8,7 +8,6 @@ import Toybox.Application.Properties;
 function testNearbySelectionKeepsLastFavourite(logger as Logger) as Boolean {
     var key = Constants.LAST_STOP_INDEX_NAME;
     var previous = Storage.getValue(key);
-    var glance = Storage.getValue(NearbyGlanceStop.KEY);
     var setting = ChristchurchBusAppProperties.getStopResetTimeMin();
     var favourites = [{"stopId" => 53090, "displayName" => "First"},
                       {"stopId" => 53091, "displayName" => "Second"}] as Array<Dictionary>;
@@ -26,16 +25,12 @@ function testNearbySelectionKeepsLastFavourite(logger as Logger) as Boolean {
             var index = favouriteIndex;
             var favouritePage = {"stopId" => favouriteId};
             ChristchurchBusDataCache.rememberFavouritePage(favouritePage, favourites);
-            NearbyGlanceStop.rememberPage(favouritePage);
             index = NearbyPageOrder.nextIndex(index, ordered.size());
             Test.assertEqualMessage(53092,
                 (ordered[index] as Array)[NearbyStopMaths.PAGE_CODE],
                 "Select after favourite reaches nearby");
             var nearbyPage = {"stopId" => 53092, "nearby" => true};
             ChristchurchBusDataCache.rememberFavouritePage(nearbyPage, favourites);
-            NearbyGlanceStop.rememberPage(nearbyPage);
-            Test.assertEqualMessage(53092, NearbyGlanceStop.read()["stopId"],
-                "glance tracks displayed nearby stop");
             var restart = ChristchurchBusDataCache.getLastFavourite(favourites);
             if (favouriteId == 53090) {
                 Test.assertMessage(restart == null,
@@ -91,11 +86,6 @@ function testNearbySelectionKeepsLastFavourite(logger as Logger) as Boolean {
             Storage.deleteValue(key);
         } else {
             Storage.setValue(key, previous as PropertyValueType);
-        }
-        if (glance == null) {
-            Storage.deleteValue(NearbyGlanceStop.KEY);
-        } else {
-            Storage.setValue(NearbyGlanceStop.KEY, glance as PropertyValueType);
         }
     }
     return true;

@@ -450,7 +450,6 @@ class ChristchurchBusViewManager {
             view.setNearbyPage();
         }
         currentView = view;
-        NearbyGlanceStop.rememberPage(stop);
         switchView();
         // Display a validated cache entry immediately, including an expired
         // entry marked stale, before any network slot or cycle budget is used.

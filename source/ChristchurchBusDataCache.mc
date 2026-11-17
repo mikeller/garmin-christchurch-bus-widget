@@ -92,7 +92,7 @@ class ChristchurchBusDataCache {
             NearbyLastStopTrace.favourite();
         }
         // A nearby-only page leaves the previous favourite (and expiry)
-        // intact. GlanceStop independently tracks the displayed stop.
+        // intact for both widget startup and the glance.
     }
 
     static function getLastStop(favourites as Array<Dictionary>) as Number? {
