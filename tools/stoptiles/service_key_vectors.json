@@ -1,5 +1,37 @@
 {
-  "description": "Synthetic service metadata v1 producer/reader contract. Invalid metadata falls back to all-visible.",
+  "description": "Synthetic service metadata contracts. Invalid metadata falls back to all-visible.",
+  "global_cases": [
+    {
+      "name": "known_partial_unknown",
+      "tile": {"v": 1, "g": "2026-11-18", "s": [[1001, 0, 0, "A"], [1002, 0, 1, "B"], [1003, 0, 2, "C"]], "m": 2, "sh": "0000000000000000000000000000000000000000000000000000000000000000", "K": 60, "i": ["000z", "0z", null], "p": [1002]},
+      "expected": {"1001": ["complete", [0, 35]], "1002": ["partial", [35]]}
+    },
+    {
+      "name": "different_tile_same_global_index",
+      "tile": {"v": 1, "g": "2026-11-18", "s": [[1004, 0, 0, "D"]], "m": 2, "sh": "0000000000000000000000000000000000000000000000000000000000000000", "K": 60, "i": ["0z"], "p": []},
+      "expected": {"1004": ["complete", [35]]}
+    },
+    {
+      "name": "index_out_of_bounds",
+      "tile": {"v": 1, "g": "2026-11-18", "s": [[1001, 0, 0, "A"]], "m": 2, "sh": "0000000000000000000000000000000000000000000000000000000000000000", "K": 60, "i": ["1o"], "p": []},
+      "expected": null
+    },
+    {
+      "name": "duplicate_index",
+      "tile": {"v": 1, "g": "2026-11-18", "s": [[1001, 0, 0, "A"]], "m": 2, "sh": "0000000000000000000000000000000000000000000000000000000000000000", "K": 60, "i": ["0000"], "p": []},
+      "expected": null
+    },
+    {
+      "name": "partial_unknown",
+      "tile": {"v": 1, "g": "2026-11-18", "s": [[1001, 0, 0, "A"]], "m": 2, "sh": "0000000000000000000000000000000000000000000000000000000000000000", "K": 60, "i": [null], "p": [1001]},
+      "expected": null
+    },
+    {
+      "name": "malformed_odd_length",
+      "tile": {"v": 1, "g": "2026-11-18", "s": [[1001, 0, 0, "A"]], "m": 2, "sh": "0000000000000000000000000000000000000000000000000000000000000000", "K": 60, "i": ["0"], "p": []},
+      "expected": null
+    }
+  ],
   "cases": [
     {
       "name": "complete_partial_unknown",

@@ -96,6 +96,39 @@ class AuditTests(unittest.TestCase):
                          for code, (state, keys) in decoded.items()}, expected)
         self.assertIsNone(audit.decode_metadata(
             vectors["cases"][0]["tile"], "2026-11-19"))
+        for case in vectors["global_cases"]:
+            with self.subTest(case["name"]):
+                decoded = audit.decode_global(case["tile"], "global_base36",
+                                              "0" * 64)
+                expected = case["expected"]
+                self.assertEqual(
+                    None if decoded is None else {
+                        str(code): [state, sorted(keys)]
+                        for code, (state, keys) in decoded.items()}, expected)
+        self.assertIsNone(audit.decode_global(
+            vectors["global_cases"][0]["tile"], "global_base36", "1" * 64))
+
+    def test_global_encodings_roundtrip_partial_unknown_and_32bit_safety(self):
+        stops = [tiles.Stop(1001, 0, 0, "Ā"), tiles.Stop(1002, 0, 1, "B"),
+                 tiles.Stop(1003, 0, 2, "C")]
+        data = {1001: ("complete", {("r", 0), ("r", 1)}),
+                1002: ("partial", {("r", 1)}), 1003: ("unknown", set())}
+        numbering = {("other" + str(n), 0): n for n in range(1, 59)}
+        numbering[("r", 0)] = 0
+        numbering[("r", 1)] = 59
+        for name, body in audit.global_payloads(
+                "2026-11-18", stops, data, numbering).items():
+            with self.subTest(name):
+                decoded = audit.decode_global(body, name, "0" * 64)
+                self.assertEqual(decoded, {
+                    1001: ("complete", {0, 59}),
+                    1002: ("partial", {59})})
+                self.assertTrue(all(len(row) == 4 for row in body["s"]))
+                self.assertEqual(body["v"], 1)
+                self.assertLessEqual(len(json.dumps(body).encode("utf-8")), 4096)
+        # Global masks travel as strings, never JSON integers > 2^31-1.
+        self.assertIsInstance(audit.global_payloads(
+            "2026-11-18", stops, data, numbering)["global_base64"]["b"][0][1], str)
 
 
 if __name__ == "__main__":

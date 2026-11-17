@@ -1,6 +1,10 @@
 # Offline service-key decision
 
-**Decision: no-go for generator, tile-reader and selection changes yet.** The
+**Updated decision: conditional go for the global-numbered wire design;
+no-go for deploying generator, reader or selection changes pending the
+human's consistency and device-validation decision.** The global measurement
+below supersedes the earlier tile-local dictionary size conclusion. The
+original decision was no-go for generator, tile-reader and selection changes. The
 preferred key is `(GTFS route_id, GTFS direction_id)`, scoped to a GTFS
 snapshot, not a SIRI display string. The preferred wire shape is additive
 tile-root metadata with `v:1` and exactly four fields per `s` row. On the
@@ -182,3 +186,162 @@ selection NO-GO until the agreed candidate bound and tile-versus-cap
 behaviour are decided. The key semantics themselves are ready for synthetic
 producer/reader contract tests. SIRI equivalence, future feed variability,
 on-device memory and real-world boundary coverage remain UNVERIFIED.
+
+## Updated measurement: global service-key numbering
+
+**This section supersedes the tile-local dictionary size gate and the
+preceding downstream gates, but not the coverage caveat.** Re-run the command
+above (without `--skip-probes`) to obtain every tile's sizes in `per_tile`,
+the worst ten in `global_sizes`, round-trip counts and selection checks.
+All candidates keep legacy `v:1`, `g`, raw four-field `s` rows, plus `m:2`,
+`sh` (64 hex characters), `K` (global numbering size), and `p` (partial
+stop-code list, empty here). The analysis assigns numbers 0..59 to the
+lexicographically sorted `(route_id,direction_id)` pairs. **No route dictionary
+is shipped in tiles or needed on the watch.** All measurements include the
+same 64-character placeholder digest. The 60-entry global table encoded as
+compact UTF-8 JSON is **1,089 bytes**; publishing it as a `meta.json` member
+for audit would add at least 1,089 bytes plus its member name, punctuation
+and any escaping required by the chosen JSON serialiser. It is not a watch
+dependency.
+
+`pairs` is `i:[[code,[index,...]],...]`; `parallel` is an `i` array aligned
+with `s`, containing an index list or `null`; `base64` and `hex` encode a
+fixed `ceil(K/8)` byte, little-endian unsigned mask as a string, paired with
+the stop code. No mask is a JSON integer (Monkey C Number is 32-bit; Long is
+64-bit). `sets` has `q` as sorted distinct index lists in this tile and
+aligned `i` with a tile-local set index or `null`; never compare set indexes
+across tiles. `base36` has aligned `i` containing two lower-case base-36
+digits per *global* index, concatenated in increasing order, or `null`.
+This last encoding saves array and stop-code repetition; its fixed width
+supports K up to 1,296. Distinct sets per tile: median 4, p95 14, max 35.
+
+| Encoding | Max B | p95 B | Median B | Tiles >4096 | Worst-tile headroom |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Global pairs | 4358 | 2577 | 1229 | 1 | -262 B |
+| Global parallel | 3910 | 2297 | 1106 | 0 | 186 B |
+| Global base64 mask | 4624 | 2911 | 1353 | 5 | -528 B |
+| Global hex mask | 4848 | 3055 | 1417 | 10 | -752 B |
+| Global set table | 3942 | 2247 | 1077 | 0 | 154 B |
+| **Global fixed-width base36** | **3812** | **2304** | **1095** | **0** | **284 B** |
+
+Worst ten in descending byte order, as `ty/tx:bytes`; all numbers include
+unchanged names. The output JSON also provides each tile's stop count.
+
+| Encoding | Worst ten tiles |
+| --- | --- |
+| Pairs | -4354/17264:4358; -4354/17263:4053; -4353/17264:3939; -4352/17267:3936; -4355/17264:3692; -4352/17264:3683; -4351/17265:3667; -4352/17265:3626; -4355/17262:3540; -4353/17257:3510 |
+| Parallel | -4354/17264:3910; -4354/17263:3653; -4353/17264:3515; -4352/17267:3496; -4355/17264:3292; -4351/17265:3259; -4352/17264:3259; -4352/17265:3226; -4355/17262:3148; -4353/17257:3126 |
+| Base64 | -4354/17264:4624; -4352/17267:4405; -4353/17264:4334; -4352/17264:4198; -4354/17263:4158; -4351/17265:4075; -4355/17264:4060; -4352/17265:4015; -4355/17262:3970; -4356/17261:3945 |
+| Hex | -4354/17264:4848; -4352/17267:4625; -4353/17264:4546; -4352/17264:4410; -4354/17263:4358; -4351/17265:4279; -4355/17264:4260; -4352/17265:4215; -4355/17262:4166; -4356/17261:4141 |
+| Sets | -4354/17264:3942; -4354/17263:3653; -4352/17267:3501; -4353/17264:3494; -4355/17264:3266; -4351/17265:3223; -4352/17264:3174; -4352/17265:3152; -4355/17262:3095; -4353/17257:3074 |
+| Base36 | -4354/17264:3812; -4354/17263:3522; -4352/17267:3477; -4353/17264:3470; -4352/17264:3264; -4355/17264:3248; -4351/17265:3235; -4352/17265:3199; -4355/17262:3140; -4356/17261:3097 |
+
+**Capacity is snapshot-specific.** On the worst base36 tile (56 stops),
+the 284-byte gap admits three extra synthetic copies of its longest-name,
+richest-key stop (28 UTF-8 name bytes and 10 keys). The fourth makes
+4,132 bytes, **36 over** cap. One additional global key on *every* known
+stop in this tile adds 112 bytes (3,924 total); two would add approximately
+224 bytes if K stays within the two-digit base36 range, leaving about
+60 bytes. Growth is not linear when a feed changes names, candidate counts
+or the key length encoding. A new route adds one or two global keys:
+K grows, but the fixed two-digit form costs nothing at stops *not* served by
+those keys. If K exceeds 1,296, fail the build and re-plan a new metadata
+schema; never truncate. Re-run the cap check for every new feed. If a later
+tile crosses 4,096, the smallest proposed *additional* measure is to
+reconsider the aligned representation or a separately versioned metadata
+endpoint for that measured excess, with request-count approval; do not
+silently narrow membership or raise the cap.
+
+**Parsed-object ESTIMATE, not a Garmin measurement.** Counting the JSON
+tree at the 56-stop worst tile, including legacy stop rows, yields:
+
+| Encoding | Arrays | Dictionaries / entries | Strings | Numbers |
+| --- | ---: | ---: | ---: | ---: |
+| Pairs | 171 | 1 / 8 | 66 | 381 |
+| Parallel | 115 | 1 / 8 | 66 | 325 |
+| Base64 or hex | 115 | 1 / 8 | 122 | 227 |
+| Sets | 95 | 1 / 9 | 67 | 352 |
+| Base36 | 59 | 1 / 8 | 122 | 171 |
+
+Assuming roughly 24-48 bytes per parsed array, 32-64 per dictionary,
+8-24 per dictionary entry, 24-48 plus UTF-8 payload per string, and 8-24
+per boxed number, base36's tree is on the order of **6-12 KB of object
+headers/references plus string bytes**, versus roughly **11-23 KB plus
+string bytes** for pairs. These are illustrative assumptions, not Monkey C
+heap sizes or validated cache write sizes. Base36 decoding also needs
+temporary integer state; avoid allocating a string or array per digit pair
+in a watch implementation. Device limits and cache writes require tests.
+
+### Recommended exact contract and consistency rule
+
+Recommend **global sorted numbering with a digest-bound base36 encoding**
+(`m:2`). Synthetic vector in `service_key_vectors.json`: `K:60`,
+`i:["000z","0z",null]`, `p:[1002]` alongside three four-field `s`
+rows means complete keys `{0,35}`, partial `{35}`, and unknown. `K`
+is the number of canonical global keys, 1..1296; each non-null `i` entry
+must be a non-empty even-length string of lower-case base36 pairs that
+decode to *strictly increasing* integers in `0..K-1`. `i` length must
+equal `s` length. `p` is a sorted unique list of public stop codes, drawn
+only from non-null `i` rows; `null` is unknown, never an empty complete
+set. Bound stop codes to 1000..99999, reject duplicate codes and mismatched
+generation or unknown `m`. The JSON root must remain <=4096 UTF-8 bytes.
+Treat malformed, absent, unsupported, unmatched-digest or stale-expired
+metadata as **all unknown**, retaining the legacy `s` rows and all pages.
+Reader must check the digest before suppressing any candidate. `K` permits
+range validation without downloading the global table.
+
+Define new `sh` as SHA-256 over compact UTF-8 JSON
+`[2,g,existing_stops_h,feed_start,feed_end,
+[[route_id,direction_id],...],
+[[publicCode,reliability,[[route_id,direction_id],...]],...]]`.
+Use `ensure_ascii=False`, separators `(",",":")`, sorted canonical
+route/direction pairs and numeric public-code order, with the mapping array
+ordered by **global index**. Include calendar-effective service changes and
+unknown/partial flags; fail closed on invalid service references. Put this
+same `sh` in each tile and deployed `meta.json`. The reader need not fetch
+meta: compare tile `sh` (and K) directly for *all loaded candidate tiles*
+before any de-duplication. The comparison binds the numbering, not just
+the service sets. If a 3-day cached tile and a fresh tile differ in `sh`
+or K, **every stop in the combined candidate selection becomes unknown**:
+retain all candidates nearest-first rather than compare unequal numbers.
+An old cache entry with no `m:2` is also all-unknown. A one-tile selection
+can use valid metadata for that tile; a stale offline tile must still
+honour existing TTL/staleness policy and should fail open when its metadata
+cannot be verified. Never compare numbers from different digests.
+
+Alternative append-only numbering: persist the complete immutable registry
+in the *published* meta, append new canonical pairs only, retain retired
+pairs as tombstones and never reuse indexes. This can keep identities stable
+across generations, but `generate_tiles.py --previous-meta` currently only
+prints the previous meta for diagnostics. The workflow does not pass it
+to the generator; the deployed meta is available only to deployment
+decision logic. Implementing an atomic, validated registry read and passing
+its predecessor through the workflow would be production changes, with
+rollback, missing/corrupt prior meta and tombstone growth to handle.
+The measured registry array alone is 1,089 bytes today. Sorted numbering
+plus `sh` fail-open is simpler and does not require persistent state.
+Sorted positions may shift when one route is added, so a digest mismatch
+**must** invalidate cross-generation comparisons. Even append-only
+numbering would still require a version/digest check for changed services.
+
+All six global encodings were JSON-serialised, decoded and compared against
+source sets across **1,435 tiles and 22,570 tile-stop appearances each**:
+zero failed rows, tiles or cross-tile conflicts. For each encoding, decoded
+selection matched source-set nearest-first selection on all **7,175**
+cell-centre/corner tile probes (zero mismatches). This is equality for
+*the same loaded tile*, not a cure for the earlier 961 first-15 or 3,444
+tile-versus-point-cap mismatches. Old fixtures, partial, unknown, malformed
+and digest mismatch are exercised by synthetic tests.
+
+**Updated downstream gates:** generator **conditional go** for a
+separately authorised service-metadata implementation with sorted global
+numbering, per-feed cap enforcement and `sh`-aware deploy decision; reader
+**conditional go** only after the human approves fail-open mixed-generation
+behaviour and on-device cache/heap validation; selection **conditional go**
+for bounded current-tile coverage without a 15-entry truncation, retaining
+unknowns and all departures. A grid/cap/request change remains **no-go**
+without re-planning. The human must decide whether mixed generations may
+temporarily disable de-duplication, and which nearby-capable device is the
+minimum memory target. On-device memory, SIRI correspondence, future feeds
+and that smallest device remain **UNVERIFIED**. No production changes were
+made here.
