@@ -22,6 +22,7 @@ class NearbyLocation {
     private var fixQuality as Number = Position.QUALITY_NOT_AVAILABLE;
     private var stale as Boolean = false;
     private var acquiring as Boolean = false;
+    private var firstCallback as Boolean = true;
     private var reacquirePending as Boolean = false;
     private var acquisitionState as Number = NearbyAcquisitionState.IDLE;
     private var timeout as Timer.Timer = new Timer.Timer();
@@ -31,6 +32,7 @@ class NearbyLocation {
     function start(callback as Method) as Void {
         stop();
         self.callback = callback;
+        firstCallback = true;
         if (!ChristchurchBusAppProperties.nearbyEnabled()) {
             return;
         }
@@ -49,17 +51,14 @@ class NearbyLocation {
             notify();
         }
         if (device != null && info != null && info.accuracy >= Position.QUALITY_POOR) {
-            NearbyStoredFix.save(device as Dictionary, now);
+            NearbyStoredFix.saveNewer(device as Dictionary, now);
         }
-        if (chosen == null || stale || info == null ||
-            info.accuracy < Position.QUALITY_POOR) {
-            if (chosen == null) {
-                state = LOCATING;
-            }
-            beginAcquisition();
-        } else {
-            scheduleReacquisition();
+        if (chosen == null) {
+            state = LOCATING;
         }
+        // A widget may close before a delayed acquisition starts. Listen
+        // immediately even when getInfo supplied a seemingly recent fix.
+        beginAcquisition();
     }
 
     private function beginAcquisition() as Void {
@@ -131,11 +130,29 @@ class NearbyLocation {
             return false;
         }
         applyFix(fix as Dictionary, now);
-        NearbyStoredFix.save(fix as Dictionary, now);
+        if (firstCallback) {
+            firstCallback = false;
+            NearbyStoredFix.saveNewer(fix as Dictionary, now);
+        } else {
+            NearbyStoredFix.save(fix as Dictionary, now);
+        }
         return true;
     }
 
     function stop() as Void {
+        if (callback != null) {
+            // A new last-known position may be available just before exit,
+            // even if no callback was delivered in this short session.
+            try {
+                var now = Time.now().value();
+                var finalFix = fromInfo(Position.getInfo(), now);
+                if (finalFix != null) {
+                    NearbyStoredFix.saveNewer(finalFix as Dictionary, now);
+                }
+            } catch (e) {
+                // A denied or unavailable fix must not delay widget exit.
+            }
+        }
         timeout.stop();
         if (acquiring) {
             disableEvents();

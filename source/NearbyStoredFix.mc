@@ -81,6 +81,24 @@ class NearbyStoredFix {
         return moved || now - (old["at"] as Number) > 600;
     }
 
+    // The first callback in a short widget session must not inherit the
+    // previous session's one-minute write throttle.
+    static function shouldWriteNewer(previous as Dictionary?, candidate as Dictionary,
+                                     now as Number) as Boolean {
+        if (!valid(candidate, now)) {
+            return false;
+        }
+        if (!valid(previous, now)) {
+            return true;
+        }
+        var old = previous as Dictionary;
+        if (candidate["unknown"] == true) {
+            return false;
+        }
+        return old["unknown"] == true ||
+            (candidate["at"] as Number) > (old["at"] as Number);
+    }
+
     static function read(now as Number) as Dictionary? {
         try {
             var stored = Storage.getValue(KEY);
@@ -98,6 +116,17 @@ class NearbyStoredFix {
             }
         } catch (e) {
             // A full object store must not prevent live location updates.
+        }
+    }
+
+    static function saveNewer(candidate as Dictionary, now as Number) as Void {
+        try {
+            if (shouldWriteNewer(read(now), candidate, now)) {
+                candidate["savedAt"] = now;
+                Storage.setValue(KEY, candidate as PropertyValueType);
+            }
+        } catch (e) {
+            // Storage failures must not block a live location update.
         }
     }
 }

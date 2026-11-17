@@ -39,6 +39,16 @@ function testNearbyStoredFixPolicy(logger as Logger) as Boolean {
     Test.assertMessage(NearbyStoredFix.choose(latest, old, now) == latest,
         "newer system fix wins over older stored fix");
     Test.assertMessage(!NearbyStoredFix.shouldWrite(old, latest, 9459), "minute limit");
+    Test.assertMessage(NearbyStoredFix.shouldWriteNewer(old, latest, 9459),
+        "first fresh callback bypasses previous session throttle");
+    Test.assertMessage(!NearbyStoredFix.shouldWriteNewer(latest, old, now),
+        "older last-known fix cannot overwrite new stored fix");
+    Test.assertMessage(!NearbyStoredFix.shouldWriteNewer(old, unknown, now),
+        "unknown age cannot replace known fix at exit");
+    Test.assertMessage(NearbyStoredFix.shouldWriteNewer(unknown, latest, now),
+        "known timestamp replaces unknown stored fix");
+    Test.assertMessage(!NearbyStoredFix.shouldWriteNewer(latest, latest, now),
+        "repeated short launch does not rewrite identical fix");
     Test.assertMessage(NearbyStoredFix.shouldWrite(old, latest, now), "older than ten minutes");
     var moved = {"v" => 1, "lat" => -4352000, "lon" => 17263700, "at" => 9900};
     Test.assertMessage(NearbyStoredFix.shouldWrite(old, moved, now), "moved over 100 m");
