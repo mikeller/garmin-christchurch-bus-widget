@@ -3,9 +3,11 @@
 
 Usage:
     generate_tiles.py INPUT OUTDIR [--etag ETAG] [--previous-meta PATH]
-                      [--static DIR] [--date YYYY-MM-DD]
+                      [--static DIR] [--date YYYY-MM-DD] [--service-metadata]
 
 INPUT is a GTFS zip (its ``stops.txt`` is used) or a path to a ``stops.txt``.
+Service metadata is opt-in and requires a complete GTFS zip and a current
+declared feed horizon; the default remains the unfiltered stops-only output.
 OUTDIR receives ``t/<ty>/<tx>.json`` tiles and ``meta.json``. The script uses
 only the Python 3 standard library and never touches the network.
 
@@ -36,6 +38,25 @@ Tile contract v1
   filtered ``[stopCode, latE5, lonE5, rawName]`` list serialised as compact
   UTF-8 JSON, so it changes only when stop data changes. ``g`` is the
   generation date (UTC) unless ``--date`` is given.
+* Generator version 2. Optional ``--service-metadata`` keeps v=1, g, grid,
+  membership and four-field s rows unchanged. It adds m=2, sh (64 lower-case
+  hex), K (1..1296 global keys), i (one null or non-empty string per s row),
+  and p (sorted partial stop codes). Every i string contains two lower-case
+  base36 digits per global index in strictly increasing order. Keys are
+  numbered from exact UTF-8 route_id order, then direction_id 0/1; no
+  dictionary is shipped. Unknown and partial rows must never be suppressed.
+  The watch must validate all loaded candidate tiles' metadata, expiry,
+  g/sh/K consistency before coverage, otherwise hide none for service
+  redundancy while retaining the normal page count and favourite rules.
+  A valid single tile needs no meta.json request. Old, unsupported, malformed
+  or expired metadata keeps s usable, but all service coverage unknown.
+  Do not compare indices across differing digests. No extra watch requests.
+  sh is SHA-256 of compact UTF-8 JSON
+  [2,g,existing_stops_h,feed_start,feed_end,global_keys,stop_service_rows],
+  with stop_service_rows sorted by numeric code and containing
+  [code,reliability,sorted canonical key pairs]. The opt-in meta has m=2,
+  K and sh, with h=sh; default h remains stops-only. All encoded tiles are
+  preflighted against 4096 bytes before any output is replaced.
 
 Defensive filtering of stops.txt rows (each rule prints a skip count):
 * ``location_type``: skip rows where location_type is set and not 0.
@@ -63,7 +84,7 @@ import zipfile
 from collections import namedtuple
 from decimal import Context, Decimal, Inexact, ROUND_FLOOR
 
-GENERATOR_VERSION = 1
+GENERATOR_VERSION = 2
 TILE_FORMAT_VERSION = 1
 TILE_SIZE_E5 = 1000
 MAX_TILE_BYTES = 4096
@@ -224,12 +245,14 @@ def _dumps(obj):
     return json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
 
 
-def encode_tile(date, stops):
+def encode_tile(date, stops, metadata=None):
     body = {
         "v": TILE_FORMAT_VERSION,
         "g": date,
         "s": [[s.code, s.lat, s.lon, s.name] for s in sorted(stops)],
     }
+    if metadata is not None:
+        body.update(metadata)
     return _dumps(body).encode("utf-8")
 
 
@@ -238,8 +261,8 @@ def stops_hash(stops):
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def build_meta(date, stops, etag):
-    return {
+def build_meta(date, stops, etag, service=None):
+    meta = {
         "v": TILE_FORMAT_VERSION,
         "g": date,
         "gv": GENERATOR_VERSION,
@@ -248,6 +271,9 @@ def build_meta(date, stops, etag):
         "e": etag or "",
         "attribution": ATTRIBUTION,
     }
+    if service is not None:
+        meta.update(m=2, K=len(service[1]), sh=service[2], h=service[2])
+    return meta
 
 
 def nearest(stops, lat, lon, count=NEARBY_COUNT):
@@ -265,11 +291,21 @@ def nearest(stops, lat, lon, count=NEARBY_COUNT):
     return sorted(stops, key=key)[:count]
 
 
-def write_output(outdir, tiles, meta, date, static_dir=None):
+def write_output(outdir, tiles, meta, date, static_dir=None, service=None):
     """Encode every tile (failing on size) and then write the output tree."""
     encoded = {}
+    if service is not None:
+        import service_metadata
+        states, global_keys, digest = service
+        if not 1 <= len(global_keys) <= 1296:
+            raise GeneratorError("service metadata requires 1..1296 usable global keys")
+        numbering = {key: n for n, key in enumerate(global_keys)}
     for (ty, tx), members in tiles.items():
-        data = encode_tile(date, members)
+        if service is not None and len(members) > 292:
+            raise GeneratorError("tile %d/%d has more than 292 stops" % (ty, tx))
+        metadata = (service_metadata.encode(members, states, numbering, digest)
+                    if service is not None else None)
+        data = encode_tile(date, members, metadata)
         if len(data) > MAX_TILE_BYTES:
             raise GeneratorError(
                 "tile %d/%d is %d bytes, over the %d byte limit"
@@ -313,7 +349,7 @@ def _print_previous(old, error, meta, out):
 
 
 def generate(input_path, outdir, etag="", date=None, previous_meta=None,
-             static_dir=None, out=None):
+             static_dir=None, out=None, service_metadata_enabled=False):
     out = out or sys.stdout
     date = date or datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     stops, skipped = load_stops(input_path)
@@ -322,11 +358,15 @@ def generate(input_path, outdir, etag="", date=None, previous_meta=None,
     if not stops:
         raise GeneratorError("no stops left after filtering")
 
+    service = None
+    if service_metadata_enabled:
+        import service_metadata
+        service = service_metadata.build(input_path, stops, date, stops_hash(stops))
     tiles = build_tiles(stops)
-    meta = build_meta(date, stops, etag)
+    meta = build_meta(date, stops, etag, service)
     # Read before write_output, which may replace the file (OUTDIR/meta.json).
     previous = _read_previous(previous_meta) if previous_meta else (None, None)
-    sizes = write_output(outdir, tiles, meta, date, static_dir)
+    sizes = write_output(outdir, tiles, meta, date, static_dir, service)
 
     print("stops: %d" % len(stops), file=out)
     print("tiles: %d" % len(tiles), file=out)
@@ -349,6 +389,8 @@ def main(argv=None):
     parser.add_argument("--previous-meta", help="previous meta.json to compare")
     parser.add_argument("--static", help="directory of static files to copy into outdir")
     parser.add_argument("--date", help="generation date, YYYY-MM-DD (default: today, UTC)")
+    parser.add_argument("--service-metadata", action="store_true",
+                        help="add global service metadata (requires full GTFS zip)")
     args = parser.parse_args(argv)
     if args.date:
         try:
@@ -359,7 +401,8 @@ def main(argv=None):
             parser.error("--date must be YYYY-MM-DD")
     try:
         generate(args.input, args.outdir, etag=args.etag, date=args.date,
-                 previous_meta=args.previous_meta, static_dir=args.static)
+                 previous_meta=args.previous_meta, static_dir=args.static,
+                 service_metadata_enabled=args.service_metadata)
     except (GeneratorError, OSError, zipfile.BadZipFile, UnicodeDecodeError, csv.Error) as error:
         print("error: %s" % error, file=sys.stderr)
         return 1
