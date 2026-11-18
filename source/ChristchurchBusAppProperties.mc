@@ -9,7 +9,27 @@ class ChristchurchBusAppProperties {
 
     static function loadStops() as Array<Dictionary> {
         if (stops == null) {
-            stops = Properties.getValue("stops") as Array<Dictionary>?;
+            var stored = Properties.getValue("stops");
+            var clean = [] as Array<Dictionary>;
+            if (stored instanceof Array) {
+                var list = stored as Array;
+                for (var i = 0; i < list.size(); i++) {
+                    if (StoredBusData.validStop(list[i])) {
+                        clean.add(list[i] as Dictionary);
+                    }
+                }
+            }
+            stops = clean;
+            // Repair invalid persisted entries once, so relaunching the
+            // widget cannot repeat the same crash.
+            if (stored != null && (!(stored instanceof Array) ||
+                (stored as Array).size() != clean.size())) {
+                try {
+                    Properties.setValue("stops", clean as Array<PropertyValueType>);
+                } catch (e) {
+                    // The validated in-memory list is still safe this session.
+                }
+            }
         }
 
         return stops != null ? stops : [];
@@ -87,5 +107,32 @@ class ChristchurchBusAppProperties {
         }
 
         return customUrl;
+    }
+
+    (:nearby)
+    static function getCustomTilesUrl() as String? {
+        var url = Properties.getValue("customTilesUrl") as String?;
+        return url == null || "".equals(url) ? null : url;
+    }
+
+    (:nearby)
+    static function nearbyEnabled() as Boolean {
+        // This accessor is also used by the glance. NearbyAvailability is
+        // widget-only, so read the same setting without crossing that scope.
+        return Properties.getValue("nearbyEnabled") as Boolean;
+    }
+
+    (:noNearby)
+    static function nearbyEnabled() as Boolean {
+        return false;
+    }
+
+    static function favouritesBeforeNearby() as Number {
+        return NearbyAvailability.favouritesBeforeNearby();
+    }
+
+    (:nearby)
+    static function nearbyStopsToShow() as Number {
+        return NearbyAvailability.stopsToShow();
     }
 }

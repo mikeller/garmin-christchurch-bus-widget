@@ -1,10 +1,37 @@
 project.manifest = manifest.xml
 
-base.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay
-descentg1.excludeAnnotations = roundScreen; colourDisplay
-instinct2.excludeAnnotations = roundScreen; colourDisplay
-instinct2s.excludeAnnotations = roundScreen; colourDisplay
-instinct2x.excludeAnnotations = roundScreen; colourDisplay
+base.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; noNearby
+# The 64 KB devices replace the base exclusions to retain the noNearby stub;
+# other devices inherit noNearby and compile the real nearby implementation.
+descentg1.excludeAnnotations = roundScreen; colourDisplay; nearby
+fenix5.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; nearby
+fenix5s.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; nearby
+fenix6.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; nearby
+fenix6s.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; nearby
+fenixchronos.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; nearby
+fr55.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; nearby
+fr645.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; nearby
+fr935.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; nearby
+instinct2.excludeAnnotations = roundScreen; colourDisplay; nearby
+instinct2s.excludeAnnotations = roundScreen; colourDisplay; nearby
+instinct2x.excludeAnnotations = roundScreen; colourDisplay; nearby
+instinctcrossover.excludeAnnotations = semioctagonalScreen; blackAndWhiteDisplay; nearby
+
+# These explicit paths replace, rather than append to, the default resources
+# directory. Nearby settings and properties must not ship on excluded devices.
+descentg1.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+fenix5.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+fenix5s.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+fenix6.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+fenix6s.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+fenixchronos.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+fr55.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+fr645.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+fr935.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+instinct2.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+instinct2s.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+instinct2x.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
+instinctcrossover.resourcePath = resources/strings; resources/drawables; resources-nonearby/settings; resources-nonearby/properties
 
 descentmk351mm.resourcePath = $(descentmk351mm.resourcePath); resources-launcher-60x60
 descentmk343mm.resourcePath = $(descentmk343mm.resourcePath); resources-launcher-60x60

@@ -1,0 +1,101 @@
+import Toybox.Lang;
+import Toybox.Test;
+import Toybox.Graphics;
+
+(:debug, :nearby)
+class NearbyPageTitleTestMeasure {
+    function width(text as String) as Number {
+        return text.length() * 10;
+    }
+}
+
+(:test, :nearby)
+function testNearbyPageTitleWithDistance(logger as Logger) as Boolean {
+    var fonts = NearbyPageTitle.fonts();
+    Test.assertEqualMessage(3, fonts.size(), "ordered system fonts");
+    Test.assertEqualMessage(Graphics.FONT_SYSTEM_SMALL, fonts[0], "first choice");
+    Test.assertEqualMessage(Graphics.FONT_SYSTEM_TINY, fonts[1], "second choice");
+    Test.assertEqualMessage(Graphics.FONT_SYSTEM_XTINY, fonts[2], "last choice");
+    var measured = new NearbyPageTitleTestMeasure();
+    var selectedFont = -1;
+    var limits = [120, 180, 400] as Array<Number>;
+    for (var f = 0; f < fonts.size(); f++) {
+        if (NearbyPageTitle.fitLines("Hereford St", "248 m", [limits[f]], measured) != null) {
+            selectedFont = f;
+            break;
+        }
+    }
+    Test.assertEqualMessage(2, selectedFont, "one line tries fonts in descending size");
+    var name = "Hereford St near Montreal St";
+    var full = NearbyPageTitle.fitLines(name, "248 m", [400], measured);
+    Test.assertEqualMessage("Hereford St near Montreal St (248 m)",
+        (full as Array)[0], "one line preserves near");
+    var two = NearbyPageTitle.fitLines(name, "248 m", [160, 220], measured);
+    Test.assertEqualMessage("Hereford St /", (two as Array)[0],
+        "slash joins the preceding street");
+    Test.assertEqualMessage("Montreal St (248 m)", (two as Array)[1],
+        "second street and whole distance");
+    var three = NearbyPageTitle.fitLines(name, "248 m", [160, 130, 80], measured);
+    Test.assertEqualMessage("Hereford St /", (three as Array)[0], "three line slash");
+    Test.assertEqualMessage("Montreal St", (three as Array)[1], "no orphan St");
+    Test.assertMessage(!"St".equals((three as Array)[1]), "road suffix not alone");
+    Test.assertEqualMessage("(248 m)", (three as Array)[2], "whole distance");
+    var other = NearbyPageTitle.fitLines("Hereford St near Cambridge Tce",
+        "234 m", [160, 130, 80], measured);
+    Test.assertEqualMessage("Cambridge Tce", (other as Array)[1],
+        "different cross street remains distinguishable");
+    Test.assertMessage(!((other as Array)[1] as String).equals((three as Array)[1]),
+        "cross streets differ");
+    Test.assertMessage(NearbyPageTitle.fitLines(name, "248 m", [160, 130, 69],
+        measured) == null, "distance cannot be split");
+    var longName = "ExtremelyLongStopNameWithoutSpaces";
+    Test.assertMessage(NearbyPageTitle.fitLines(longName, "188 m",
+        [90, 100, 100], measured) == null, "truncation is last resort");
+    var shortened = NearbyPageTitle.truncate(longName, "188 m",
+        [90, 100, 100], measured);
+    Test.assertEqualMessage(3, (shortened as Array).size(),
+        "two name lines and whole distance line");
+    Test.assertEqualMessage("Extremely", (shortened as Array)[0],
+        "first name line is untruncated");
+    Test.assertEqualMessage("LongSto...", (shortened as Array)[1],
+        "last name line visibly marks truncation");
+    Test.assertEqualMessage("(188 m)", (shortened as Array)[(shortened as Array).size() - 1],
+        "distance not truncated");
+    Test.assertEqualMessage("Stop (99 m)", NearbyPageTitle.text("Stop", "99 m"),
+        "distance suffix");
+    Test.assertMessage(NearbyPageTitle.rowsFit(40, 3, 28, 5, 28, 240, 170),
+        "three title lines plus two departures fit 240 px round profile");
+    Test.assertMessage(!NearbyPageTitle.rowsFit(40, 3, 28, 5, 28, 170, 170),
+        "short profile must fall back to two lines");
+    Test.assertMessage(!NearbyPageTitle.rowsFit(40, 3, 28, 5, 28, 240, 60),
+        "bottom departure must have usable chord width");
+    return true;
+}
+
+(:test, :nearby)
+function testNearbyWordSplitterAndFontHeights(logger as Logger) as Boolean {
+    var expected = [[], ["Stop"], ["Hereford", "St"], ["Hereford", "St"],
+                    ["Hereford", "St"], ["Hereford", "St", "near", "Montreal", "St"]];
+    var inputs = ["", "Stop", "Hereford St", "  Hereford  St  ",
+                  "Hereford St ", "Hereford St near Montreal St"];
+    for (var i = 0; i < inputs.size(); i++) {
+        var words = NearbyPageTitle.splitWords(inputs[i]);
+        Test.assertEqualMessage((expected[i] as Array).size(), words.size(),
+            "split word count");
+        for (var j = 0; j < words.size(); j++) {
+            Test.assertEqualMessage((expected[i] as Array)[j], words[j],
+                "split word");
+        }
+    }
+    var fonts = NearbyPageTitle.fonts();
+    var mk1 = NearbyPageTitle.smallerFonts(fonts, [29, 26, 26]);
+    Test.assertEqualMessage(2, mk1.size(), "Mk1 regular XTINY is not smaller");
+    Test.assertEqualMessage(Graphics.FONT_SYSTEM_TINY, mk1[1], "smallest Mk1 font");
+    Test.assertEqualMessage(3, NearbyPageTitle.smallerFonts(fonts, [29, 26, 22]).size(),
+        "strictly descending heights");
+    Test.assertEqualMessage(1, NearbyPageTitle.smallerFonts(fonts, [26, 26, 26]).size(),
+        "equal heights");
+    Test.assertEqualMessage(1, NearbyPageTitle.smallerFonts([fonts[0]], [29]).size(),
+        "single font");
+    return true;
+}

@@ -13,4 +13,16 @@
     <setting propertyKey="@Properties.customUrl" title="@Strings.CustomUrlTitle">
         <settingConfig type="url"/>
     </setting>
+    <setting propertyKey="@Properties.customTilesUrl" title="@Strings.CustomTilesUrlTitle">
+        <settingConfig type="url"/>
+    </setting>
+    <setting propertyKey="@Properties.nearbyEnabled" title="@Strings.NearbyEnabledTitle">
+        <settingConfig type="boolean"/>
+    </setting>
+    <setting propertyKey="@Properties.nearbyStopsToShow" title="@Strings.NearbyStopsToShowTitle">
+        <settingConfig type="numeric" min="1" max="5" errorMessage="@Strings.NearbyStopsToShowRangeError"/>
+    </setting>
+    <setting propertyKey="@Properties.favouritesBeforeNearby" title="@Strings.FavouritesBeforeNearbyTitle">
+        <settingConfig type="numeric" min="0" max="16" errorMessage="@Strings.FavouritesBeforeNearbyRangeError"/>
+    </setting>
 </settings>

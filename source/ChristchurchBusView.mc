@@ -7,9 +7,17 @@ import Toybox.Time.Gregorian;
 
 class ChristchurchBusView extends BaseChristchurchBusView {
     var data as Dictionary<String, String or Array> = {} as Dictionary<String, String or Array>;
+    // One bounded entry shared across view instances (a cache hit recreates the view).
+    private static var fittedRows as Array = [];
+    private static var fittedSecond as Number = -1;
+    private static var fittedWidth as Number = -1;
+    private static var fittedHeight as Number = -1;
+    private static var fittedStartY as Number = -1;
+    private static var fittedVisits as Array?;
+    private static var fittedX as Number = 0;
         
-    function initialize(data as Dictionary<String, String or Array>, displayName as String, dataIsStale as Boolean) {
-        BaseChristchurchBusView.initialize(displayName, dataIsStale);
+    function initialize(data as Dictionary<String, String or Array>, displayName as String, dataIsStale as Boolean, subtitle as String?, distanceSuffix as String?) {
+        BaseChristchurchBusView.initialize(displayName, dataIsStale, subtitle, distanceSuffix);
 
         self.data = data;
     }
@@ -19,51 +27,79 @@ class ChristchurchBusView extends BaseChristchurchBusView {
 
         var screenWidth = dc.getWidth();
         var screenHeight = dc.getHeight();
+        var rowHeight = dc.getFontHeight(Graphics.FONT_XTINY);
 
-        var lineHeight = dc.getFontHeight(Graphics.FONT_SYSTEM_TINY);
+        // Each title variant supplies its actual bottom in cursorY; only
+        // nearby titles may reserve fewer departure rows when they wrap.
+        var linesToShow = departureRowsToShow(dc, rowHeight);
 
-        var nameColumnX = calculateViewPortBoundaryX(cursorY, lineHeight, screenWidth, screenHeight, false);
-        var nameColumnXBottom = calculateViewPortBoundaryX(cursorY + (Constants.LINES_TO_SHOW - 1) * (lineHeight + Constants.VERTICAL_SPACE), lineHeight, screenWidth, screenHeight, false);
-        if (nameColumnXBottom > nameColumnX) {
-            nameColumnX = nameColumnXBottom;
+        var now = Time.now();
+        var second = now.value();
+        var visitsToFit = data["MonitoredStopVisit"] as Array<Dictionary>?;
+        // The displayed countdown includes seconds. A new second changes the row
+        // text and must refit; a redraw within that second reuses the measured rows.
+        if (second != fittedSecond ||
+            !DepartureRowsKey.same(visitsToFit, fittedVisits, screenWidth, fittedWidth,
+                                   screenHeight, fittedHeight, cursorY, fittedStartY)) {
+            fittedRows = [];
+            fittedSecond = second;
+            fittedWidth = screenWidth;
+            fittedHeight = screenHeight;
+            fittedStartY = cursorY;
+            fittedVisits = visitsToFit;
+            var index = 0;
+            var rows = [] as Array;
+            if (visitsToFit != null) {
+                while (rows.size() < linesToShow && index < visitsToFit.size()) {
+                    var visitToFit = visitsToFit[index];
+                    var departureText = visitToFit["ExpectedDepartureTime"] as String?;
+                    var departure = departureText != null ? Utils.parseIsoDate(departureText) : null;
+                    if (departure != null) {
+                        var difference = departure.compare(now);
+                        if (difference >= 0) {
+                            var wait = (difference / 60).format("%02d") + ":" + (difference % 60).format("%02d");
+                            rows.add([wait, visitToFit["PublishedLineName"],
+                                      visitToFit["DestinationName"], visitToFit["VehicleAtStop"] == true]);
+                        }
+                    }
+                    index++;
+                }
+            }
+            var step = rowHeight + Constants.VERTICAL_SPACE;
+            fittedX = calculateViewPortBoundaryX(cursorY, rowHeight, screenWidth, screenHeight, false);
+            var bottomLeft = calculateViewPortBoundaryX(
+                cursorY + (linesToShow - 1) * step, rowHeight,
+                screenWidth, screenHeight, false);
+            if (bottomLeft > fittedX) {
+                fittedX = bottomLeft;
+            }
+            for (var i = 0; i < rows.size(); i++) {
+                var row = rows[i] as Array;
+                var rowY = cursorY + i * step;
+                if (rowY + rowHeight > screenHeight - Constants.VERTICAL_SPACE) {
+                    break;
+                }
+                var right = calculateViewPortBoundaryX(rowY, rowHeight, screenWidth, screenHeight, true);
+                var width = right - fittedX - Constants.HORIZONTAL_SPACE;
+                fittedRows.add([DepartureRowFit.fit(row[0] as String, row[1] as String?,
+                    row[2] as String?, width, dc), row[3]]);
+            }
         }
 
-        var columnsX = [
-            nameColumnX,
-        ] as Array<Number>;
-
-        var index = 0;
         var lineCount = 0;
         var visits = data["MonitoredStopVisit"] as Array<Dictionary>?;
         if (visits != null) {
-            while (lineCount < Constants.LINES_TO_SHOW && index < visits.size()) {
-                var visit = visits[index];
-
-                var expectedDepartureTimeString = visit["ExpectedDepartureTime"] as String;
-                var expectedDepartureTime = Utils.parseIsoDate(expectedDepartureTimeString);
-                if (expectedDepartureTime != null) {
-                    var timeDifference = expectedDepartureTime.compare(Time.now());
-                    if (timeDifference >= 0) {
-                        var waitTime = (timeDifference / 60).format("%02d") + ":" + (timeDifference % 60).format("%02d");
-
-                        var busAtStop = visit["VehicleAtStop"] as Boolean;
-                        var lineName = visit["PublishedLineName"] as String;
-                        var destinationName = visit["DestinationName"] as String;
-
-                        if (busAtStop) {
-                            dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_WHITE);
-                        } else {
-                            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
-                        }
-                        dc.drawText(columnsX[0], cursorY, Graphics.FONT_SYSTEM_TINY, waitTime + ": " + lineName + " (" + destinationName + ")", Graphics.TEXT_JUSTIFY_LEFT);
-
-                        cursorY += lineHeight + Constants.VERTICAL_SPACE;
-
-                        lineCount++;
-                    }
+            while (lineCount < fittedRows.size()) {
+                var row = fittedRows[lineCount] as Array;
+                if (row[1] as Boolean) {
+                    dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_WHITE);
+                } else {
+                    dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
                 }
-
-                index++;
+                dc.drawText(fittedX, cursorY, Graphics.FONT_XTINY,
+                            row[0] as String, Graphics.TEXT_JUSTIFY_LEFT);
+                cursorY += rowHeight + Constants.VERTICAL_SPACE;
+                lineCount++;
             }
         } else {
             var errorMessage = "";
@@ -97,7 +133,9 @@ class ChristchurchBusView extends BaseChristchurchBusView {
             }
 
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
-            dc.drawText(columnsX[0], cursorY, Graphics.FONT_SYSTEM_TINY, errorMessage, Graphics.TEXT_JUSTIFY_LEFT);
+            dc.drawText(calculateViewPortBoundaryX(cursorY,
+                rowHeight, screenWidth, screenHeight, false),
+                cursorY, Graphics.FONT_XTINY, errorMessage, Graphics.TEXT_JUSTIFY_LEFT);
         }
     }
 
@@ -109,7 +147,10 @@ class ChristchurchBusView extends BaseChristchurchBusView {
         if (y > circleOriginY) {
             y += fontHeight;
         }
-        var normalisedY = 1.0f * (circleOriginY - y) / circleOriginY;     
+        // Keep the chord calculation defined if the last row falls beyond the circle.
+        if (y < 0) { y = 0; }
+        if (y > screenHeight) { y = screenHeight; }
+        var normalisedY = 1.0f * (circleOriginY - y) / circleOriginY;
         var angle = Math.asin(normalisedY);
         if (rightSide) {
             angle += Math.PI;

@@ -16,12 +16,45 @@ class ChristchurchBusApp extends Application.AppBase {
         }
     }
 
+    (:nearby)
     function getGlanceView() as [ GlanceView ] or [ GlanceView, GlanceViewDelegate ] or Null {
-        var stopIndex = ChristchurchBusDataCache.getLastStop();
-        if (stopIndex < 0 || stopIndex >= stops.size()) {
-            stopIndex = 0;
+        var selected = selectFavouriteForGlance();
+        var nearbyName = null as String?;
+        if (selected != null && selected["nearbyAt"] == null &&
+            ChristchurchBusAppProperties.nearbyEnabled() &&
+            NearbyGlanceTitle.isBlank(selected["displayName"] as String?)) {
+            var cached = cachedNearbyTitleStop(selected["stopId"] as Number);
+            if (cached != null) {
+                nearbyName = cached["displayName"] as String?;
+            }
+        }
+        return [new ChristchurchBusGlanceView(selected, nearbyName)] as [GlanceView];
+    }
+
+    (:noNearby)
+    function getGlanceView() as [ GlanceView ] or [ GlanceView, GlanceViewDelegate ] or Null {
+        var lastId = ChristchurchBusDataCache.getLastStop(stops);
+        var stopIndex = 0;
+        for (var i = 0; i < stops.size(); i++) {
+            if (stops[i]["stopId"] == lastId) {
+                stopIndex = i;
+                break;
+            }
         }
         return [new ChristchurchBusGlanceView(stops.size() > 0 ? stops[stopIndex] : null)] as [GlanceView];
+    }
+
+    (:nearby, :glance)
+    private function selectFavouriteForGlance() as Dictionary? {
+        var lastId = ChristchurchBusDataCache.getLastFavourite(stops);
+        var first = stops.size() == 0 && ChristchurchBusAppProperties.nearbyEnabled() ?
+            ChristchurchBusDataCache.getNearbyStop(null) : null;
+        return NearbyGlanceSelection.select(stops, lastId, first);
+    }
+
+    (:nearby, :glance)
+    private function cachedNearbyTitleStop(stopId as Number) as Dictionary? {
+        return ChristchurchBusDataCache.getNearbyStop(stopId);
     }
 
     (:typecheck(disableGlanceCheck))
@@ -39,7 +72,27 @@ class ChristchurchBusApp extends Application.AppBase {
     }
 
     function onStop(state as Dictionary?) as Void {
+        if (viewManager != null) {
+            (viewManager as ChristchurchBusViewManager).stop();
+            // A later start may reuse this AppBase instance. Rebuild the
+            // manager so persisted selection and location are read again.
+            viewManager = null;
+        }
         Utils.log("App Stopped.");
+    }
+
+    (:nearby)
+    function nearbyViewHidden(view as WatchUi.View) as Void {
+        if (viewManager != null) {
+            (viewManager as ChristchurchBusViewManager).viewHidden(view);
+        }
+    }
+
+    (:nearby)
+    function nearbyViewShown(view as WatchUi.View) as Void {
+        if (viewManager != null) {
+            (viewManager as ChristchurchBusViewManager).viewShown(view);
+        }
     }
 }
 

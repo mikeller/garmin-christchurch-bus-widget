@@ -2,4 +2,8 @@
     <property id="stops" type="array"></property>
     <property id="stopResetTimeMin" type="number">0</property>
     <property id="customUrl" type="string"></property>
+    <property id="customTilesUrl" type="string"></property>
+    <property id="nearbyEnabled" type="boolean">true</property>
+    <property id="nearbyStopsToShow" type="number">3</property>
+    <property id="favouritesBeforeNearby" type="number">0</property>
 </properties>

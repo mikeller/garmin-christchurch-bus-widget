@@ -6,10 +6,6 @@ import Toybox.Communications;
 class ChristchurchBusDataReader {
     private const DATA_PATH as String = "rti/siri/v1/sm";
 
-    private const NEAR as String = " near ";
-    private const BUS as String =  "Bus ";
-    private const PLATFORM as String =  " (Platform ";
-
     private var baseUrl as String = "https://apis.metroinfo.co.nz/";
 
     private var connectionProblem as Boolean = false;
@@ -73,9 +69,19 @@ class ChristchurchBusDataReader {
         };
 
         if (System.getDeviceSettings().connectionAvailable) {
+            if (!NearbyRequestSlots.acquire()) {
+                concurrentRequestCount--;
+                return false;
+            }
             requestIsRunning[handle] = true;
-
-            Communications.makeWebRequest(baseUrl + DATA_PATH, params, options, method(:onReceiveData));
+            try {
+                Communications.makeWebRequest(baseUrl + DATA_PATH, params, options, method(:onReceiveData));
+            } catch (e) {
+                NearbyRequestSlots.release();
+                requestIsRunning[handle] = false;
+                concurrentRequestCount--;
+                throw e;
+            }
 
             Utils.log("Sent request for handle: " + handle + ", " + stopId);
         } else {
@@ -91,6 +97,11 @@ class ChristchurchBusDataReader {
         return true;
     }
 
+    (:nearby)
+    function isRunning(handle as Number) as Boolean {
+        return requestIsRunning[handle] == true;
+    }
+
     private function persistStopName(stopId as Number, data as Dictionary<String, String or Array>) as Void {
         var visits = data["MonitoredStopVisit"] as Array<Dictionary>?;
         if (visits != null) {
@@ -98,22 +109,7 @@ class ChristchurchBusDataReader {
             var journey = visit["MonitoredVehicleJourney"] as Dictionary<String, String or Number or Boolean or Dictionary>;
             var stopName = (journey["MonitoredCall"] as Dictionary<String, String or Boolean or Dictionary>)["StopPointName"] as String;
             
-            var pos = stopName.find(NEAR);
-            if (pos != null) {
-                stopName = stopName.substring(0, pos) as String;
-            }
-
-            pos = stopName.find(BUS);
-            if (pos != null) {
-                stopName = stopName.substring(0, pos) + stopName.substring(pos + BUS.length(), stopName.length());
-            }
-            
-            pos = stopName.find(PLATFORM);
-            if (pos != null) {
-                stopName = stopName.substring(0, pos + 2) + stopName.substring(pos + PLATFORM.length(), stopName.length());
-            }
-
-            ChristchurchBusAppProperties.setStopNameIfEmpty(stopId, stopName);
+            ChristchurchBusAppProperties.setStopNameIfEmpty(stopId, SharedStopName.clean(stopName));
         }
     }
 
@@ -198,6 +194,7 @@ class ChristchurchBusDataReader {
 
         requestIsRunning[handle] = false;
         concurrentRequestCount--;
+        NearbyRequestSlots.release();
     }
 
     private function showStaleData(stopId as Number, handle as Number, requestIsCompleted as Boolean, callback as Method(data as Dictionary<String, String or Array>?, handle as Number, requestIsCompleted as Boolean, dataIsStale as Boolean) as Void) as Void {
