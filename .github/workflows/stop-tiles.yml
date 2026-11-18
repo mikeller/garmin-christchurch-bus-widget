@@ -13,6 +13,19 @@
 #   * Optional repository variables (Settings > Variables) to tune the sanity
 #     check without editing this file: STOP_TILES_MAX_DROP_PERCENT (default 10)
 #     and STOP_TILES_MIN_STOPS (default 1800).
+#   * Optional repository variable STOP_TILES_SERVICE_METADATA (default
+#     'false'). Set to 'true' to pass --service-metadata to
+#     generate_tiles.py, adding the opt-in v2 fields (m, K, sh, i, p) to
+#     every tile. Enabling it requires the fetched Metro feed to satisfy the
+#     v2 preconditions baked into tools/stoptiles/service_metadata.py: a full
+#     GTFS zip containing routes.txt, trips.txt, stop_times.txt,
+#     calendar.txt, calendar_dates.txt and feed_info.txt; a declared feed
+#     horizon (feed_start_date/feed_end_date) that covers the generation
+#     date; 1..1296 usable global service keys; and every tile still within
+#     the 4096-byte limit. generate_tiles.py --service-metadata enforces all
+#     of this itself, so running it locally against a current gtfs.zip (a
+#     clean exit rather than a GeneratorError) is the advisory precondition
+#     check to use before flipping this variable in CI.
 #   * Settings > General > Features > Issues must be enabled for the failure
 #     alert below to be able to open an issue.
 #
@@ -93,6 +106,7 @@ env:
   # fails the run, as does a count below the absolute floor.
   MAX_DROP_PERCENT: ${{ vars.STOP_TILES_MAX_DROP_PERCENT || '10' }}
   MIN_STOPS: ${{ vars.STOP_TILES_MIN_STOPS || '1800' }}
+  SERVICE_METADATA: ${{ vars.STOP_TILES_SERVICE_METADATA || 'false' }}
   FORCE: ${{ inputs.force && 'true' || 'false' }}
 
 jobs:
@@ -179,6 +193,7 @@ jobs:
         if: steps.fetch.outputs.result == 'download'
         env:
           ETAG: ${{ steps.fetch.outputs.etag }}
+          SERVICE_METADATA: ${{ env.SERVICE_METADATA }}
         run: |
           set -euo pipefail
           work="$RUNNER_TEMP/stoptiles"
@@ -187,8 +202,11 @@ jobs:
           # a file that is valid JSON but not an object. deploy_decision.py
           # treats such a file as having no baseline, so passing it here would
           # stop the run before a repaired meta.json could be published.
-          python3 tools/stoptiles/generate_tiles.py "$work/gtfs.zip" site \
-            --etag "$ETAG"
+          args=("$work/gtfs.zip" site --etag "$ETAG")
+          if [ "$SERVICE_METADATA" = true ]; then
+            args+=(--service-metadata)
+          fi
+          python3 tools/stoptiles/generate_tiles.py "${args[@]}"
 
       - name: Sanity check and decide whether to deploy
         id: decide
