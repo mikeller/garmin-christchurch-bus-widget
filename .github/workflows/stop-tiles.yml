@@ -129,6 +129,10 @@ jobs:
       h: ${{ steps.smoke_values.outputs.h }}
       gv: ${{ steps.smoke_values.outputs.gv }}
       tile: ${{ steps.smoke_values.outputs.tile }}
+      # Only set when SERVICE_METADATA is 'true' and the build's meta.json has
+      # m == 2; see build-values in tools/stoptiles/smoke_test.py.
+      k: ${{ steps.smoke_values.outputs.k }}
+      sh: ${{ steps.smoke_values.outputs.sh }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -251,6 +255,9 @@ jobs:
         if: steps.decide.outputs.deploy == 'true'
         run: |
           set -euo pipefail
+          # build-values prints k=/sh= only when site/meta.json has m == 2,
+          # i.e. only when SERVICE_METADATA was 'true' for this build; the
+          # k/sh job outputs above are then left empty.
           python3 tools/stoptiles/smoke_test.py build-values \
             --site site --stop "$SMOKE_STOP_CODE" | tee -a "$GITHUB_OUTPUT"
 
@@ -312,17 +319,25 @@ jobs:
           EXPECTED_H: ${{ needs.build.outputs.h }}
           EXPECTED_GV: ${{ needs.build.outputs.gv }}
           TILE: ${{ needs.build.outputs.tile }}
+          EXPECTED_K: ${{ needs.build.outputs.k }}
+          EXPECTED_SH: ${{ needs.build.outputs.sh }}
         run: |
           set -euo pipefail
-          python3 tools/stoptiles/smoke_test.py check \
-            --base-url "https://${OWNER,,}.github.io/${REPO}" \
-            --expect-h "$EXPECTED_H" \
-            --expect-gv "$EXPECTED_GV" \
-            --tile "$TILE" \
-            --stop "$SMOKE_STOP_CODE" \
-            --outside-path "$SMOKE_OUTSIDE_TILE" \
-            --max-seconds 480 --delay 30 \
-            --cache-bust "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          args=(check
+            --base-url "https://${OWNER,,}.github.io/${REPO}"
+            --expect-h "$EXPECTED_H"
+            --expect-gv "$EXPECTED_GV"
+            --tile "$TILE"
+            --stop "$SMOKE_STOP_CODE"
+            --outside-path "$SMOKE_OUTSIDE_TILE"
+            --max-seconds 480 --delay 30
+            --cache-bust "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}")
+          # Only assert the opt-in v2 fields when this build ran with
+          # SERVICE_METADATA; otherwise `check` asserts they are absent.
+          if [ "$SERVICE_METADATA" = true ]; then
+            args+=(--expect-k "$EXPECTED_K" --expect-sh "$EXPECTED_SH")
+          fi
+          python3 tools/stoptiles/smoke_test.py "${args[@]}"
 
   keepalive:
     # Independent of the build, so that it also runs when the build fails.

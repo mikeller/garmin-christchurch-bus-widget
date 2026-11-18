@@ -17,9 +17,16 @@ build-values --site DIR --stop CODE
     error here, so a renumbered reference stop never blocks a deploy of valid
     data. The post-deploy ``check`` then fails with a clear message.
 
+    When ``meta.json`` has ``m == 2`` (the opt-in service-metadata v2 fields,
+    see generate_tiles.py), also prints ``k=<int>`` (the global key count
+    ``K``) and ``sh=<sha256>`` (the service digest ``sh``), after validating
+    that they are well-formed. When ``m`` is not 2, no ``k``/``sh`` lines are
+    printed at all, so the workflow's outputs stay empty and the smoke test
+    below correctly expects the v2 fields to be absent.
+
 check --base-url URL --expect-h H --expect-gv N --tile PATH --stop CODE
       [--outside-path PATH] [--max-seconds S] [--delay S] [--timeout S]
-      [--cache-bust TOKEN]
+      [--cache-bust TOKEN] [--expect-k K --expect-sh SH]
     Fetch the published ``meta.json`` and the tile at PATH and assert:
 
     * ``meta.json``: HTTP 200, valid UTF-8 JSON object, ``v == 1``, ``h`` and
@@ -29,6 +36,22 @@ check --base-url URL --expect-h H --expect-gv N --tile PATH --stop CODE
     * optionally, OUTSIDE-PATH (a tile far outside coverage) returns HTTP 404.
       That is why the watch sees responseCode -400 outside coverage: Pages
       answers with a 404 HTML page, which is not JSON.
+
+    ``--expect-k``/``--expect-sh`` are optional and must be given together.
+    They encode whether the build ran with the service-metadata v2 opt-in:
+
+    * when given, additionally assert ``meta.json["m"] == 2``,
+      ``meta.json["K"] == K``, ``meta.json["sh"] == SH`` and
+      ``meta.json["h"] == meta.json["sh"]``; and that the tile has
+      ``m == 2``, ``len(i) == len(s)``, every entry of ``i`` is either
+      ``null`` or a non-empty even-length lower-case base36 string whose
+      decoded two-character groups are each less than K and strictly
+      increasing, and ``p`` is a list of stop codes that is a subset of the
+      codes in ``s``;
+    * when omitted (the default, matching PR #19's claim that disabled-mode
+      output is byte-identical to v1), assert instead that none of the v2
+      keys (``m``, ``sh``, ``K``, ``i``, ``p``) are present at all in either
+      ``meta.json`` or the tile.
 
     Every attempt re-checks everything. A failing attempt is retried every
     DELAY seconds (CDN propagation after a deploy) until MAX-SECONDS have
@@ -47,6 +70,7 @@ import urllib.error
 import urllib.request
 
 from generate_tiles import MAX_TILE_BYTES, TILE_FORMAT_VERSION, tile_id
+from service_metadata import ALPHABET
 
 META_PATH = "meta.json"
 DEFAULT_STOP = 53090
@@ -54,9 +78,12 @@ DEFAULT_MAX_SECONDS = 480
 DEFAULT_DELAY = 30
 DEFAULT_TIMEOUT = 15
 READ_LIMIT = 65536  # never read more than this from a response
+V2_FIELDS = ("m", "sh", "K", "i", "p")
+MAX_GLOBAL_KEYS = 1296  # service_metadata.build: 1..1296 usable global keys
 
 _TILE_PATH_RE = re.compile(r"t/-?[0-9]+/-?[0-9]+\.json", re.ASCII)
 _SHA256_RE = re.compile(r"[0-9a-f]{64}", re.ASCII)
+_BASE36_VALUES = {char: value for value, char in enumerate(ALPHABET)}
 
 
 class SmokeError(Exception):
@@ -86,7 +113,69 @@ def _parse_json_object(body):
     return obj, None
 
 
-def check_meta(status, body, expect_h, expect_gv):
+def _check_v2_absent(obj, label):
+    """Failures if any v1/v2 wire field (m, sh, K, i, p) is present at all.
+
+    Guards PR #19's claim that default-mode (v2 disabled) output is
+    byte-identical to v1: none of the opt-in fields may leak in even when the
+    service-metadata opt-in is off.
+    """
+    present = [field for field in V2_FIELDS if field in obj]
+    if present:
+        return ["%s: unexpected v2 field(s) present: %s"
+                % (label, ", ".join(present))]
+    return []
+
+
+def _decode_index_entry(value, expect_k, label):
+    """Failures for one entry of a v2 tile's ``i`` array."""
+    if value is None:
+        return []
+    if (not isinstance(value, str) or not value or len(value) % 2 != 0
+            or any(char not in _BASE36_VALUES for char in value)):
+        return ["%s: i entry %r is not null or a non-empty even-length "
+                "lower-case base36 string" % (label, value)]
+    indices = [_BASE36_VALUES[value[pos]] * 36 + _BASE36_VALUES[value[pos + 1]]
+              for pos in range(0, len(value), 2)]
+    failures = []
+    if any(index >= expect_k for index in indices):
+        failures.append("%s: i entry %r has a decoded index >= K (%d)"
+                        % (label, value, expect_k))
+    if any(a >= b for a, b in zip(indices, indices[1:])):
+        failures.append("%s: i entry %r is not strictly increasing"
+                        % (label, value))
+    return failures
+
+
+def _check_tile_v2(tile, expect_k, label):
+    """Failures for a v2 tile's m, i and p fields (sh/K come from meta.json)."""
+    failures = []
+    if not (_is_int(tile.get("m")) and tile["m"] == 2):
+        failures.append("%s: m is %r, expected 2" % (label, tile.get("m")))
+    stops = tile.get("s")
+    stop_count = len(stops) if isinstance(stops, list) else None
+    indices = tile.get("i")
+    if not isinstance(indices, list):
+        failures.append("%s: i is not a list" % label)
+    else:
+        if stop_count is not None and len(indices) != stop_count:
+            failures.append("%s: i has %d entries, expected %d (len(s))"
+                            % (label, len(indices), stop_count))
+        for entry in indices:
+            failures += _decode_index_entry(entry, expect_k, label)
+    partial = tile.get("p")
+    if not isinstance(partial, list):
+        failures.append("%s: p is not a list" % label)
+    elif isinstance(stops, list):
+        codes = {entry[0] for entry in stops
+                if isinstance(entry, list) and entry and _is_int(entry[0])}
+        if not all(_is_int(code) and code in codes for code in partial):
+            failures.append("%s: p (%r) is not a subset of the stop codes in s"
+                            % (label, partial))
+    return failures
+
+
+def check_meta(status, body, expect_h, expect_gv, expect_k=None, expect_sh=None):
     """Failures (a list of messages) for the published meta.json."""
     if status != 200:
         return ["meta.json: HTTP %s, expected 200" % status]
@@ -97,16 +186,30 @@ def check_meta(status, body, expect_h, expect_gv):
     if not (_is_int(meta.get("v")) and meta["v"] == TILE_FORMAT_VERSION):
         failures.append("meta.json: v is %r, expected %d"
                         % (meta.get("v"), TILE_FORMAT_VERSION))
-    if meta.get("h") != expect_h:
-        failures.append("meta.json: h is %r, expected %r (the build's value)"
-                        % (meta.get("h"), expect_h))
     if not (_is_int(meta.get("gv")) and meta["gv"] == expect_gv):
         failures.append("meta.json: gv is %r, expected %d (the build's value)"
                         % (meta.get("gv"), expect_gv))
+    if meta.get("h") != expect_h:
+        failures.append("meta.json: h is %r, expected %r (the build's value)"
+                        % (meta.get("h"), expect_h))
+    if expect_k is None:
+        failures += _check_v2_absent(meta, "meta.json")
+        return failures
+    if not (_is_int(meta.get("m")) and meta["m"] == 2):
+        failures.append("meta.json: m is %r, expected 2" % meta.get("m"))
+    if not (_is_int(meta.get("K")) and meta["K"] == expect_k):
+        failures.append("meta.json: K is %r, expected %d (the build's value)"
+                        % (meta.get("K"), expect_k))
+    if meta.get("sh") != expect_sh:
+        failures.append("meta.json: sh is %r, expected %r (the build's value)"
+                        % (meta.get("sh"), expect_sh))
+    if meta.get("h") != meta.get("sh"):
+        failures.append("meta.json: h (%r) does not equal sh (%r)"
+                        % (meta.get("h"), meta.get("sh")))
     return failures
 
 
-def check_tile(status, body, stop_code, tile_path="tile"):
+def check_tile(status, body, stop_code, tile_path="tile", expect_k=None):
     """Failures for the published tile that must contain the reference stop."""
     label = "tile %s" % tile_path
     if status != 200:
@@ -128,6 +231,10 @@ def check_tile(status, body, stop_code, tile_path="tile"):
     elif not any(isinstance(entry, list) and entry and _is_int(entry[0])
                  and entry[0] == stop_code for entry in stops):
         failures.append("%s: stop %d is missing from s" % (label, stop_code))
+    if expect_k is None:
+        failures += _check_v2_absent(tile, label)
+    else:
+        failures += _check_tile_v2(tile, expect_k, label)
     return failures
 
 
@@ -166,7 +273,7 @@ def _url(base_url, path, token):
 
 
 def check_once(fetch, base_url, expect_h, expect_gv, tile_path, stop_code,
-               outside_path, token):
+               outside_path, token, expect_k=None, expect_sh=None):
     """One pass over every assertion. Returns the list of failure messages."""
     failures = []
 
@@ -179,10 +286,12 @@ def check_once(fetch, base_url, expect_h, expect_gv, tile_path, stop_code,
 
     result = get(META_PATH)
     if result is not None:
-        failures += check_meta(result[0], result[1], expect_h, expect_gv)
+        failures += check_meta(result[0], result[1], expect_h, expect_gv,
+                               expect_k, expect_sh)
     result = get(tile_path)
     if result is not None:
-        failures += check_tile(result[0], result[1], stop_code, tile_path)
+        failures += check_tile(result[0], result[1], stop_code, tile_path,
+                               expect_k)
     if outside_path:
         result = get(outside_path)
         if result is not None:
@@ -190,7 +299,8 @@ def check_once(fetch, base_url, expect_h, expect_gv, tile_path, stop_code,
     return failures
 
 
-def validate_arguments(expect_h, expect_gv, tile_path, outside_path):
+def validate_arguments(expect_h, expect_gv, tile_path, outside_path,
+                       expect_k=None, expect_sh=None):
     if not _SHA256_RE.fullmatch(expect_h or ""):
         raise SmokeError("--expect-h is not a sha256 hex digest: %r" % expect_h)
     if not tile_path:
@@ -202,21 +312,30 @@ def validate_arguments(expect_h, expect_gv, tile_path, outside_path):
             raise SmokeError("not a tile path (t/<ty>/<tx>.json): %r" % path)
     if not _is_int(expect_gv):
         raise SmokeError("--expect-gv is not an integer")
+    if (expect_k is None) != (expect_sh is None):
+        raise SmokeError("--expect-k and --expect-sh must be given together")
+    if expect_k is not None and not (_is_int(expect_k) and 1 <= expect_k <= MAX_GLOBAL_KEYS):
+        raise SmokeError("--expect-k is not an integer in 1..%d: %r"
+                         % (MAX_GLOBAL_KEYS, expect_k))
+    if expect_sh is not None and not _SHA256_RE.fullmatch(expect_sh or ""):
+        raise SmokeError("--expect-sh is not a sha256 hex digest: %r" % expect_sh)
 
 
 def run_check(fetch, base_url, expect_h, expect_gv, tile_path, stop_code,
               outside_path=None, max_seconds=DEFAULT_MAX_SECONDS,
               delay=DEFAULT_DELAY, token="local", sleep=time.sleep,
-              clock=time.monotonic, out=None):
+              clock=time.monotonic, out=None, expect_k=None, expect_sh=None):
     """Retry check_once until it passes or max_seconds elapse. Returns bool."""
     out = out or sys.stderr
-    validate_arguments(expect_h, expect_gv, tile_path, outside_path)
+    validate_arguments(expect_h, expect_gv, tile_path, outside_path,
+                       expect_k, expect_sh)
     start = clock()
     attempt = 0
     while True:
         attempt += 1
         failures = check_once(fetch, base_url, expect_h, expect_gv, tile_path,
-                              stop_code, outside_path, "%s-%d" % (token, attempt))
+                              stop_code, outside_path, "%s-%d" % (token, attempt),
+                              expect_k, expect_sh)
         if not failures:
             print("smoke test passed on attempt %d" % attempt, file=out)
             return True
@@ -286,11 +405,22 @@ def _run(args):
         print("h=%s" % meta["h"])
         print("gv=%d" % meta["gv"])
         print("tile=%s" % tile)
+        if _is_int(meta.get("m")) and meta["m"] == 2:
+            k, sh = meta.get("K"), meta.get("sh")
+            if not (_is_int(k) and 1 <= k <= MAX_GLOBAL_KEYS):
+                raise SmokeError("meta.json has m=2 but K is not an integer "
+                                 "in 1..%d: %r" % (MAX_GLOBAL_KEYS, k))
+            if not (isinstance(sh, str) and _SHA256_RE.fullmatch(sh)):
+                raise SmokeError("meta.json has m=2 but sh is not a sha256 "
+                                 "hex digest: %r" % sh)
+            print("k=%d" % k)
+            print("sh=%s" % sh)
         return 0
     ok = run_check(
         lambda url: http_fetch(url, args.timeout), args.base_url, args.expect_h,
         args.expect_gv, args.tile, args.stop, args.outside_path or None,
-        args.max_seconds, args.delay, args.cache_bust)
+        args.max_seconds, args.delay, args.cache_bust,
+        expect_k=args.expect_k, expect_sh=args.expect_sh)
     return 0 if ok else 1
 
 
@@ -313,6 +443,10 @@ def build_parser():
     p.add_argument("--delay", type=float, default=DEFAULT_DELAY)
     p.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT)
     p.add_argument("--cache-bust", default="local")
+    p.add_argument("--expect-k", type=int, default=None,
+                   help="the build's global key count K; requires --expect-sh")
+    p.add_argument("--expect-sh", default=None,
+                   help="the build's service digest sh; requires --expect-k")
     return parser
 
 

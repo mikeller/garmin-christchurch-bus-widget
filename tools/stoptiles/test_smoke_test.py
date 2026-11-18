@@ -15,6 +15,7 @@ import socket
 import tempfile
 import threading
 import unittest
+import zipfile
 
 import generate_tiles
 import smoke_test as st
@@ -32,6 +33,36 @@ STOPS_TXT = "\n".join(
                                  53097, 53098, 53099, 53100, 53101, 53102, 53103,
                                  53104, 53105, 53106, 53107])]
     + ["2107,2107,Far Away Stop,-43.60000,172.70000,0"]) + "\n"
+
+V2_DATE = "2026-11-12"
+
+
+def build_v2_gtfs_zip(path):
+    """A full GTFS zip around the same stops as STOPS_TXT, for --service-metadata.
+
+    Stop 53090 has two unrestricted keys (routes A and B, direction 0): state
+    complete. Stop 53091 has one unrestricted key (route A, direction 0) and
+    one restricted (pickup_type 2) visit on route B, direction 1: state
+    partial, so it is also in the tile's "p" list. The global key order is
+    [(A,0), (B,0)], so K == 2.
+    """
+    tables = {
+        "stops.txt": STOPS_TXT,
+        "routes.txt": "route_id,route_short_name\nA,1\nB,2\n",
+        "trips.txt": ("trip_id,route_id,direction_id,service_id\n"
+                     "t_a0,A,0,weekday\nt_b0,B,0,weekday\nt_b1,B,1,weekday\n"),
+        "stop_times.txt": ("stop_id,trip_id,pickup_type\n"
+                          "53090,t_a0,0\n53090,t_b0,0\n"
+                          "53091,t_a0,0\n53091,t_b1,2\n"),
+        "calendar.txt": ("service_id,monday,tuesday,wednesday,thursday,friday,"
+                        "saturday,sunday,start_date,end_date\n"
+                        "weekday,1,1,1,1,1,1,1,20261101,20261130\n"),
+        "calendar_dates.txt": "service_id,date,exception_type\n",
+        "feed_info.txt": "feed_start_date,feed_end_date\n20261101,20261130\n",
+    }
+    with zipfile.ZipFile(path, "w") as archive:
+        for name, text in tables.items():
+            archive.writestr(name, text)
 
 
 class StubSite:
@@ -151,7 +182,8 @@ class SiteTestCase(unittest.TestCase):
     def check(self, routes, **overrides):
         """Run `check` against a stub site; returns (exit code, stderr)."""
         params = {"h": self.meta["h"], "gv": self.meta["gv"], "tile": self.tile,
-                  "outside": OUTSIDE, "max_seconds": 0, "delay": 0}
+                  "outside": OUTSIDE, "max_seconds": 0, "delay": 0,
+                  "k": None, "sh": None}
         params.update(overrides)
         argv = ["check", "--expect-h", params["h"],
                 "--expect-gv", str(params["gv"]), "--tile", params["tile"],
@@ -159,10 +191,36 @@ class SiteTestCase(unittest.TestCase):
                 "--delay", str(params["delay"]), "--timeout", "5"]
         if params["outside"]:
             argv += ["--outside-path", params["outside"]]
+        if params["k"] is not None:
+            argv += ["--expect-k", str(params["k"]), "--expect-sh", params["sh"]]
         err = io.StringIO()
         with StubSite(routes) as stub, contextlib.redirect_stderr(err):
             code = st.main(argv + ["--base-url", stub.url])
         return code, err.getvalue()
+
+
+class ServiceMetadataSiteTestCase(SiteTestCase):
+    """Generates one real v2 (--service-metadata) site tree for its tests."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        gtfs = os.path.join(cls.tmp.name, "gtfs.zip")
+        build_v2_gtfs_zip(gtfs)
+        cls.site = os.path.join(cls.tmp.name, "site")
+        generate_tiles.generate(gtfs, cls.site, date=V2_DATE, out=io.StringIO(),
+                                service_metadata_enabled=True)
+        with open(os.path.join(cls.site, "meta.json"), encoding="utf-8") as handle:
+            cls.meta = json.load(handle)
+        cls.routes = routes_from_site(cls.site)
+        cls.tile = st.home_tile(cls.site, STOP)
+
+    def check(self, routes, **overrides):
+        # By default assert against this build's own K/sh; a test that wants
+        # the v2-disabled ("fields absent") check instead passes k=None.
+        overrides.setdefault("k", self.meta["K"])
+        overrides.setdefault("sh", self.meta["sh"])
+        return super().check(routes, **overrides)
 
 
 class BuildValuesTest(SiteTestCase):
@@ -198,6 +256,21 @@ class BuildValuesTest(SiteTestCase):
             with contextlib.redirect_stderr(err):
                 self.assertEqual(st.main(["build-values", "--site", empty]), 1)
             self.assertIn("cannot read", err.getvalue())
+
+
+class BuildValuesV2Test(ServiceMetadataSiteTestCase):
+    def test_cli_also_prints_k_and_sh_when_m_is_2(self):
+        self.assertEqual(self.meta["m"], 2)
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = st.main(["build-values", "--site", self.site, "--stop", str(STOP)])
+        self.assertEqual(code, 0, err.getvalue())
+        self.assertEqual(out.getvalue().splitlines(),
+                         ["h=%s" % self.meta["h"], "gv=%d" % self.meta["gv"],
+                          "tile=%s" % self.tile, "k=%d" % self.meta["K"],
+                          "sh=%s" % self.meta["sh"]])
+        # The opt-in meta has h == sh (asserted by generate_tiles itself too).
+        self.assertEqual(self.meta["h"], self.meta["sh"])
 
 
 class CheckFailureCasesTest(SiteTestCase):
@@ -359,6 +432,80 @@ class CheckFailureCasesTest(SiteTestCase):
                 self.assertEqual(code, 1, argv)
                 self.assertEqual(stub.requests, [], argv)
                 self.assertIn("error:", err.getvalue())
+
+
+class V2FieldsAbsentTest(SiteTestCase):
+    """Without --expect-k/--expect-sh, check asserts the v2 fields are absent.
+
+    This guards PR #19's claim that disabled-mode (default) output is
+    byte-identical to v1: the site built here never passed --service-metadata.
+    """
+
+    def test_v2_disabled_meta_and_tile_pass_the_absence_check(self):
+        self.assertNotIn("m", self.meta)
+        code, err = self.check(self.good_routes())
+        self.assertEqual(code, 0, err)
+
+    def test_meta_with_unexpected_v2_fields_fails(self):
+        routes = self.good_routes()
+        meta = dict(self.meta, m=2, K=1, sh="0" * 64)
+        routes["meta.json"] = (200, dumps(meta))
+        code, err = self.check(routes)
+        self.assertEqual(code, 1)
+        self.assertIn("meta.json: unexpected v2 field(s) present: m, sh, K", err)
+
+    def test_tile_with_unexpected_v2_fields_fails(self):
+        routes = self.good_routes()
+        tile = json.loads(routes[self.tile][1])
+        tile.update(m=2, sh="0" * 64, K=1, i=[None] * len(tile["s"]), p=[])
+        routes[self.tile] = (200, dumps(tile))
+        code, err = self.check(routes)
+        self.assertEqual(code, 1)
+        self.assertIn("unexpected v2 field(s) present: m, sh, K, i, p", err)
+
+
+class ServiceMetadataCheckTest(ServiceMetadataSiteTestCase):
+    """--expect-k/--expect-sh validation of a real --service-metadata build."""
+
+    def test_v2_meta_and_tile_pass_validation(self):
+        self.assertEqual(self.meta["m"], 2)
+        self.assertEqual(self.meta["K"], 2)
+        self.assertEqual(self.meta["h"], self.meta["sh"])
+        tile = json.loads(self.good_routes()[self.tile][1])
+        self.assertEqual(tile["p"], [53091])
+        code, err = self.check(self.good_routes())
+        self.assertEqual(code, 0, err)
+
+    def test_out_of_range_index_fails(self):
+        routes = self.good_routes()
+        tile = json.loads(routes[self.tile][1])
+        pos = next(i for i, e in enumerate(tile["s"]) if e[0] == STOP)
+        self.assertEqual(tile["i"][pos], "0001")  # keys (A,0) and (B,0): K == 2
+        tile["i"][pos] = "0005"  # second index 5 is >= K
+        routes[self.tile] = (200, dumps(tile))
+        code, err = self.check(routes)
+        self.assertEqual(code, 1)
+        self.assertIn("decoded index >= K (2)", err)
+
+    def test_non_increasing_index_fails(self):
+        routes = self.good_routes()
+        tile = json.loads(routes[self.tile][1])
+        pos = next(i for i, e in enumerate(tile["s"]) if e[0] == STOP)
+        tile["i"][pos] = "0100"  # indices [1, 0]: in range but not increasing
+        routes[self.tile] = (200, dumps(tile))
+        code, err = self.check(routes)
+        self.assertEqual(code, 1)
+        self.assertIn("not strictly increasing", err)
+
+    def test_k_mismatch_fails(self):
+        code, err = self.check(self.good_routes(), k=self.meta["K"] + 1)
+        self.assertEqual(code, 1)
+        self.assertIn("meta.json: K is", err)
+
+    def test_sh_mismatch_fails(self):
+        code, err = self.check(self.good_routes(), sh="0" * 64)
+        self.assertEqual(code, 1)
+        self.assertIn("meta.json: sh is", err)
 
 
 class HttpFetchTest(unittest.TestCase):
