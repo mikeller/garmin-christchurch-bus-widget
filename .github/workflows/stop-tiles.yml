@@ -44,9 +44,13 @@
 # never published, and reports a PASS/FAIL verdict plus tile/key/headroom
 # metrics (tools/stoptiles/service_metadata_canary.py). It is advisory only:
 # its output goes solely to the job summary, it never writes under site/, and
-# it can never fail the build job or affect the deploy/smoke-test decision.
-# It exists to give a human the evidence needed to decide when it is safe to
-# set the STOP_TILES_SERVICE_METADATA repository variable to true.
+# a failure of the canary itself cannot fail the build job or affect the
+# deploy/smoke-test decision. Its run time is bounded (120 second timeout in
+# the step script, 3 minute step timeout as a backstop) so a hung canary
+# cannot use up the build job's 15 minute budget, which would otherwise fail
+# the job and block the deploy. It exists to give a human the evidence needed
+# to decide when it is safe to set the STOP_TILES_SERVICE_METADATA repository
+# variable to true.
 #
 # Failure alerting (job alert), scheduled runs only.
 #   Verified (GitHub docs, "Notifications for workflow runs",
@@ -224,6 +228,12 @@ jobs:
 
       - name: Check v2 opt-in preconditions (advisory)
         if: steps.fetch.outputs.result == 'download'
+        # Bound the time this advisory step can take from the build job's
+        # budget: timeout-minutes kills the step if the script below hangs,
+        # and continue-on-error stops a killed or failed step from failing
+        # the job.
+        timeout-minutes: 3
+        continue-on-error: true
         run: |
           # This step is advisory-only evidence for the
           # STOP_TILES_SERVICE_METADATA opt-in decision. Its output goes only
@@ -232,12 +242,14 @@ jobs:
           # default, so mkdir and the canary are each guarded with
           # "|| exit 0" to make sure that default and the trailing "exit 0"
           # together mean nothing in this step can fail the build job, the
-          # deploy decision, or the later jobs.
+          # deploy decision, or the later jobs. The canary itself is limited
+          # to 120 seconds by timeout(1); exit status 124 on a timeout is
+          # absorbed by "|| true" like any other canary failure.
           set -uo pipefail
           work="$RUNNER_TEMP/stoptiles"
           scratch="$work/service-metadata-canary"
           mkdir -p "$scratch" || exit 0
-          python3 tools/stoptiles/service_metadata_canary.py \
+          timeout --kill-after=10 120 python3 tools/stoptiles/service_metadata_canary.py \
             "$work/gtfs.zip" "$scratch" >> "$GITHUB_STEP_SUMMARY" || true
           exit 0
 
