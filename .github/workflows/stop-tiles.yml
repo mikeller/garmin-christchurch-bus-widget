@@ -225,15 +225,18 @@ jobs:
       - name: Check v2 opt-in preconditions (advisory)
         if: steps.fetch.outputs.result == 'download'
         run: |
-          # Deliberately no "set -e": this step is advisory-only evidence for
-          # the STOP_TILES_SERVICE_METADATA opt-in decision. Its output goes
-          # only to the scratch directory below and the job summary, never to
-          # site/, and the trailing "exit 0" means nothing in this step can
-          # fail the build job, the deploy decision, or the later jobs.
+          # This step is advisory-only evidence for the
+          # STOP_TILES_SERVICE_METADATA opt-in decision. Its output goes only
+          # to the scratch directory below and the job summary, never to
+          # site/. GitHub Actions runs `run:` steps with errexit on by
+          # default, so mkdir and the canary are each guarded with
+          # "|| exit 0" to make sure that default and the trailing "exit 0"
+          # together mean nothing in this step can fail the build job, the
+          # deploy decision, or the later jobs.
           set -uo pipefail
           work="$RUNNER_TEMP/stoptiles"
           scratch="$work/service-metadata-canary"
-          mkdir -p "$scratch"
+          mkdir -p "$scratch" || exit 0
           python3 tools/stoptiles/service_metadata_canary.py \
             "$work/gtfs.zip" "$scratch" >> "$GITHUB_STEP_SUMMARY" || true
           exit 0
