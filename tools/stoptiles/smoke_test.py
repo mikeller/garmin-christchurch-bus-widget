@@ -43,11 +43,13 @@ check --base-url URL --expect-h H --expect-gv N --tile PATH --stop CODE
     * when given, additionally assert ``meta.json["m"] == 2``,
       ``meta.json["K"] == K``, ``meta.json["sh"] == SH`` and
       ``meta.json["h"] == meta.json["sh"]``; and that the tile has
-      ``m == 2``, ``len(i) == len(s)``, every entry of ``i`` is either
-      ``null`` or a non-empty even-length lower-case base36 string whose
-      decoded two-character groups are each less than K and strictly
-      increasing, and ``p`` is a list of stop codes that is a subset of the
-      codes in ``s``;
+      ``m == 2``, ``K == K``, ``sh == SH``, ``len(i) == len(s)``, every entry
+      of ``i`` is either ``null`` or a non-empty even-length lower-case
+      base36 string whose decoded two-character groups are each less than K
+      and strictly increasing, and ``p`` is a list of stop codes that is a
+      subset of the codes in ``s``. Checking the tile's own K/sh, not just
+      meta.json's, is what catches a CDN serving a stale tile from an
+      earlier build alongside current metadata;
     * when omitted (the default, matching PR #19's claim that disabled-mode
       output is byte-identical to v1), assert instead that none of the v2
       keys (``m``, ``sh``, ``K``, ``i``, ``p``) are present at all in either
@@ -147,11 +149,25 @@ def _decode_index_entry(value, expect_k, label):
     return failures
 
 
-def _check_tile_v2(tile, expect_k, label):
-    """Failures for a v2 tile's m, i and p fields (sh/K come from meta.json)."""
+def _check_tile_v2(tile, expect_k, expect_sh, label):
+    """Failures for a v2 tile's m, K, sh, i and p fields.
+
+    The tile embeds its own K and sh (service_metadata.encode, merged into
+    every tile by encode_tile), identical to the build's meta.json values.
+    Checking them here, not just on meta.json, is what lets this catch a CDN
+    serving a stale tile from an earlier build alongside current metadata:
+    without this, a stale tile could still pass if its i indices happened to
+    stay below the new K.
+    """
     failures = []
     if not (_is_int(tile.get("m")) and tile["m"] == 2):
         failures.append("%s: m is %r, expected 2" % (label, tile.get("m")))
+    if not (_is_int(tile.get("K")) and tile["K"] == expect_k):
+        failures.append("%s: K is %r, expected %d (the build's value)"
+                        % (label, tile.get("K"), expect_k))
+    if tile.get("sh") != expect_sh:
+        failures.append("%s: sh is %r, expected %r (the build's value)"
+                        % (label, tile.get("sh"), expect_sh))
     stops = tile.get("s")
     stop_count = len(stops) if isinstance(stops, list) else None
     indices = tile.get("i")
@@ -209,7 +225,8 @@ def check_meta(status, body, expect_h, expect_gv, expect_k=None, expect_sh=None)
     return failures
 
 
-def check_tile(status, body, stop_code, tile_path="tile", expect_k=None):
+def check_tile(status, body, stop_code, tile_path="tile", expect_k=None,
+               expect_sh=None):
     """Failures for the published tile that must contain the reference stop."""
     label = "tile %s" % tile_path
     if status != 200:
@@ -234,7 +251,7 @@ def check_tile(status, body, stop_code, tile_path="tile", expect_k=None):
     if expect_k is None:
         failures += _check_v2_absent(tile, label)
     else:
-        failures += _check_tile_v2(tile, expect_k, label)
+        failures += _check_tile_v2(tile, expect_k, expect_sh, label)
     return failures
 
 
@@ -291,7 +308,7 @@ def check_once(fetch, base_url, expect_h, expect_gv, tile_path, stop_code,
     result = get(tile_path)
     if result is not None:
         failures += check_tile(result[0], result[1], stop_code, tile_path,
-                               expect_k)
+                               expect_k, expect_sh)
     if outside_path:
         result = get(outside_path)
         if result is not None:

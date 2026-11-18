@@ -507,6 +507,30 @@ class ServiceMetadataCheckTest(ServiceMetadataSiteTestCase):
         self.assertEqual(code, 1)
         self.assertIn("meta.json: sh is", err)
 
+    def test_stale_tile_with_matching_meta_still_fails_on_k(self):
+        # A CDN could serve current meta.json alongside a stale tile from an
+        # earlier build. Even though the stale tile's own i indices here
+        # still satisfy "< expect_k" and the p subset check, its own K no
+        # longer matches the build's K, so this must still fail.
+        routes = self.good_routes()
+        tile = json.loads(routes[self.tile][1])
+        self.assertEqual(tile["K"], self.meta["K"])
+        tile["K"] = self.meta["K"] + 1
+        routes[self.tile] = (200, dumps(tile))
+        code, err = self.check(routes)
+        self.assertEqual(code, 1)
+        self.assertIn("tile %s: K is" % self.tile, err)
+
+    def test_stale_tile_with_matching_meta_still_fails_on_sh(self):
+        routes = self.good_routes()
+        tile = json.loads(routes[self.tile][1])
+        self.assertEqual(tile["sh"], self.meta["sh"])
+        tile["sh"] = "0" * 64
+        routes[self.tile] = (200, dumps(tile))
+        code, err = self.check(routes)
+        self.assertEqual(code, 1)
+        self.assertIn("tile %s: sh is" % self.tile, err)
+
 
 class HttpFetchTest(unittest.TestCase):
     def test_http_error_status_is_returned_with_its_body(self):
