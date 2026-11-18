@@ -1,0 +1,31 @@
+# Runs the stop tiles generator's unit test suite on pull requests, so a
+# change can be checked before merge without waiting for the scheduled or
+# push-triggered Stop tiles workflow (.github/workflows/stop-tiles.yml). This
+# workflow is deliberately separate from, and does not change, that one: it
+# never fetches the GTFS feed, never touches the METRO_GTFS_KEY secret, and
+# never needs Pages or issue permissions.
+name: Stop tiles unit tests
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'tools/stoptiles/**'
+      - '.github/workflows/stoptiles-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run generator unit tests
+        run: python3 -m unittest discover tools/stoptiles

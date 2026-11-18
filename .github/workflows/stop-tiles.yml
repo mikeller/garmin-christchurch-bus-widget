@@ -13,6 +13,19 @@
 #   * Optional repository variables (Settings > Variables) to tune the sanity
 #     check without editing this file: STOP_TILES_MAX_DROP_PERCENT (default 10)
 #     and STOP_TILES_MIN_STOPS (default 1800).
+#   * Optional repository variable STOP_TILES_SERVICE_METADATA (default
+#     'false'). Set to 'true' to pass --service-metadata to
+#     generate_tiles.py, adding the opt-in v2 fields (m, K, sh, i, p) to
+#     every tile. Enabling it requires the fetched Metro feed to satisfy the
+#     v2 preconditions baked into tools/stoptiles/service_metadata.py: a full
+#     GTFS zip containing routes.txt, trips.txt, stop_times.txt,
+#     calendar.txt, calendar_dates.txt and feed_info.txt; a declared feed
+#     horizon (feed_start_date/feed_end_date) that covers the generation
+#     date; 1..1296 usable global service keys; and every tile still within
+#     the 4096-byte limit. generate_tiles.py --service-metadata enforces all
+#     of this itself, so running it locally against a current gtfs.zip (a
+#     clean exit rather than a GeneratorError) is the advisory precondition
+#     check to use before flipping this variable in CI.
 #   * Settings > General > Features > Issues must be enabled for the failure
 #     alert below to be able to open an issue.
 #
@@ -24,6 +37,20 @@
 # also asserts that a tile far outside coverage returns 404: that is why the
 # watch sees responseCode -400 there. The assertions live in
 # tools/stoptiles/smoke_test.py and are unit tested.
+#
+# v2 opt-in precondition canary (build job step "Check v2 opt-in
+# preconditions (advisory)"): runs the generator with --service-metadata
+# against each day's freshly fetched gtfs.zip into a scratch directory that is
+# never published, and reports a PASS/FAIL verdict plus tile/key/headroom
+# metrics (tools/stoptiles/service_metadata_canary.py). It is advisory only:
+# its output goes solely to the job summary, it never writes under site/, and
+# a failure of the canary itself cannot fail the build job or affect the
+# deploy/smoke-test decision. Its run time is bounded (120 second timeout in
+# the step script, 3 minute step timeout as a backstop) so a hung canary
+# cannot use up the build job's 15 minute budget, which would otherwise fail
+# the job and block the deploy. It exists to give a human the evidence needed
+# to decide when it is safe to set the STOP_TILES_SERVICE_METADATA repository
+# variable to true.
 #
 # Failure alerting (job alert), scheduled runs only.
 #   Verified (GitHub docs, "Notifications for workflow runs",
@@ -93,6 +120,7 @@ env:
   # fails the run, as does a count below the absolute floor.
   MAX_DROP_PERCENT: ${{ vars.STOP_TILES_MAX_DROP_PERCENT || '10' }}
   MIN_STOPS: ${{ vars.STOP_TILES_MIN_STOPS || '1800' }}
+  SERVICE_METADATA: ${{ vars.STOP_TILES_SERVICE_METADATA || 'false' }}
   FORCE: ${{ inputs.force && 'true' || 'false' }}
 
 jobs:
@@ -105,6 +133,10 @@ jobs:
       h: ${{ steps.smoke_values.outputs.h }}
       gv: ${{ steps.smoke_values.outputs.gv }}
       tile: ${{ steps.smoke_values.outputs.tile }}
+      # Only set when SERVICE_METADATA is 'true' and the build's meta.json has
+      # m == 2; see build-values in tools/stoptiles/smoke_test.py.
+      k: ${{ steps.smoke_values.outputs.k }}
+      sh: ${{ steps.smoke_values.outputs.sh }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -179,6 +211,7 @@ jobs:
         if: steps.fetch.outputs.result == 'download'
         env:
           ETAG: ${{ steps.fetch.outputs.etag }}
+          SERVICE_METADATA: ${{ env.SERVICE_METADATA }}
         run: |
           set -euo pipefail
           work="$RUNNER_TEMP/stoptiles"
@@ -187,8 +220,38 @@ jobs:
           # a file that is valid JSON but not an object. deploy_decision.py
           # treats such a file as having no baseline, so passing it here would
           # stop the run before a repaired meta.json could be published.
-          python3 tools/stoptiles/generate_tiles.py "$work/gtfs.zip" site \
-            --etag "$ETAG"
+          args=("$work/gtfs.zip" site --etag "$ETAG")
+          if [ "$SERVICE_METADATA" = true ]; then
+            args+=(--service-metadata)
+          fi
+          python3 tools/stoptiles/generate_tiles.py "${args[@]}"
+
+      - name: Check v2 opt-in preconditions (advisory)
+        if: steps.fetch.outputs.result == 'download'
+        # Bound the time this advisory step can take from the build job's
+        # budget: timeout-minutes kills the step if the script below hangs,
+        # and continue-on-error stops a killed or failed step from failing
+        # the job.
+        timeout-minutes: 3
+        continue-on-error: true
+        run: |
+          # This step is advisory-only evidence for the
+          # STOP_TILES_SERVICE_METADATA opt-in decision. Its output goes only
+          # to the scratch directory below and the job summary, never to
+          # site/. GitHub Actions runs `run:` steps with errexit on by
+          # default, so mkdir and the canary are each guarded with
+          # "|| exit 0" to make sure that default and the trailing "exit 0"
+          # together mean nothing in this step can fail the build job, the
+          # deploy decision, or the later jobs. The canary itself is limited
+          # to 120 seconds by timeout(1); exit status 124 on a timeout is
+          # absorbed by "|| true" like any other canary failure.
+          set -uo pipefail
+          work="$RUNNER_TEMP/stoptiles"
+          scratch="$work/service-metadata-canary"
+          mkdir -p "$scratch" || exit 0
+          timeout --kill-after=10 120 python3 tools/stoptiles/service_metadata_canary.py \
+            "$work/gtfs.zip" "$scratch" >> "$GITHUB_STEP_SUMMARY" || true
+          exit 0
 
       - name: Sanity check and decide whether to deploy
         id: decide
@@ -207,6 +270,9 @@ jobs:
         if: steps.decide.outputs.deploy == 'true'
         run: |
           set -euo pipefail
+          # build-values prints k=/sh= only when site/meta.json has m == 2,
+          # i.e. only when SERVICE_METADATA was 'true' for this build; the
+          # k/sh job outputs above are then left empty.
           python3 tools/stoptiles/smoke_test.py build-values \
             --site site --stop "$SMOKE_STOP_CODE" | tee -a "$GITHUB_OUTPUT"
 
@@ -268,17 +334,25 @@ jobs:
           EXPECTED_H: ${{ needs.build.outputs.h }}
           EXPECTED_GV: ${{ needs.build.outputs.gv }}
           TILE: ${{ needs.build.outputs.tile }}
+          EXPECTED_K: ${{ needs.build.outputs.k }}
+          EXPECTED_SH: ${{ needs.build.outputs.sh }}
         run: |
           set -euo pipefail
-          python3 tools/stoptiles/smoke_test.py check \
-            --base-url "https://${OWNER,,}.github.io/${REPO}" \
-            --expect-h "$EXPECTED_H" \
-            --expect-gv "$EXPECTED_GV" \
-            --tile "$TILE" \
-            --stop "$SMOKE_STOP_CODE" \
-            --outside-path "$SMOKE_OUTSIDE_TILE" \
-            --max-seconds 480 --delay 30 \
-            --cache-bust "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          args=(check
+            --base-url "https://${OWNER,,}.github.io/${REPO}"
+            --expect-h "$EXPECTED_H"
+            --expect-gv "$EXPECTED_GV"
+            --tile "$TILE"
+            --stop "$SMOKE_STOP_CODE"
+            --outside-path "$SMOKE_OUTSIDE_TILE"
+            --max-seconds 480 --delay 30
+            --cache-bust "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}")
+          # Only assert the opt-in v2 fields when this build ran with
+          # SERVICE_METADATA; otherwise `check` asserts they are absent.
+          if [ "$SERVICE_METADATA" = true ]; then
+            args+=(--expect-k "$EXPECTED_K" --expect-sh "$EXPECTED_SH")
+          fi
+          python3 tools/stoptiles/smoke_test.py "${args[@]}"
 
   keepalive:
     # Independent of the build, so that it also runs when the build fails.
