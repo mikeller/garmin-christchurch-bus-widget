@@ -38,6 +38,16 @@
 # watch sees responseCode -400 there. The assertions live in
 # tools/stoptiles/smoke_test.py and are unit tested.
 #
+# v2 opt-in precondition canary (build job step "Check v2 opt-in
+# preconditions (advisory)"): runs the generator with --service-metadata
+# against each day's freshly fetched gtfs.zip into a scratch directory that is
+# never published, and reports a PASS/FAIL verdict plus tile/key/headroom
+# metrics (tools/stoptiles/service_metadata_canary.py). It is advisory only:
+# its output goes solely to the job summary, it never writes under site/, and
+# it can never fail the build job or affect the deploy/smoke-test decision.
+# It exists to give a human the evidence needed to decide when it is safe to
+# set the STOP_TILES_SERVICE_METADATA repository variable to true.
+#
 # Failure alerting (job alert), scheduled runs only.
 #   Verified (GitHub docs, "Notifications for workflow runs",
 #   https://docs.github.com/en/actions/concepts/workflows-and-actions/notifications-for-workflow-runs):
@@ -207,6 +217,22 @@ jobs:
             args+=(--service-metadata)
           fi
           python3 tools/stoptiles/generate_tiles.py "${args[@]}"
+
+      - name: Check v2 opt-in preconditions (advisory)
+        if: steps.fetch.outputs.result == 'download'
+        run: |
+          # Deliberately no "set -e": this step is advisory-only evidence for
+          # the STOP_TILES_SERVICE_METADATA opt-in decision. Its output goes
+          # only to the scratch directory below and the job summary, never to
+          # site/, and the trailing "exit 0" means nothing in this step can
+          # fail the build job, the deploy decision, or the later jobs.
+          set -uo pipefail
+          work="$RUNNER_TEMP/stoptiles"
+          scratch="$work/service-metadata-canary"
+          mkdir -p "$scratch"
+          python3 tools/stoptiles/service_metadata_canary.py \
+            "$work/gtfs.zip" "$scratch" >> "$GITHUB_STEP_SUMMARY" || true
+          exit 0
 
       - name: Sanity check and decide whether to deploy
         id: decide
