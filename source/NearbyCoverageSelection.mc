@@ -2,6 +2,13 @@ import Toybox.Lang;
 
 // Pure selection over the borrowed rows and parallel service keys of the
 // loaded candidate contexts. No departure rows or per-stop sets are built.
+//
+// A loaded tile can validly hold up to NearbyServiceContext.MAX_STOPS (292)
+// rows, so the coverage scan below is written to stay close to linear in the
+// number of rows: a quadratic-in-rows-times-favourites version of this
+// algorithm was measured only against small synthetic fixtures (see
+// tools/stoptiles/NEARBY_VALIDATION.md) and tripped the "code executed too
+// long" watchdog on a real Descent Mk1 against a real, busier stop cluster.
 (:nearby)
 class NearbyCoverageSelection {
     // Same result shape as NearbyStopMaths.nearestSplit().
@@ -20,10 +27,41 @@ class NearbyCoverageSelection {
         if (!NearbyServiceContext.consistent(contexts) || n <= 0) {
             return legacy;
         }
-        var chosen = [] as Array;
+
+        // A code -> true lookup, built once, instead of a linear favourites
+        // scan (up to 16 entries) repeated for every row on every candidate.
+        var favouriteSet = {} as Dictionary<Number, Boolean>;
+        for (var i = 0; i < favourites.size(); i++) {
+            favouriteSet[favourites[i]] = true;
+        }
+
+        // Favourites present in the loaded tile, nearest first, with their
+        // service keys resolved once. The scan below only ever needs the
+        // prefix of this list nearer than the current candidate, and the
+        // candidate distance only grows, so each entry becomes a covering
+        // provider at most once for the whole call instead of being
+        // rediscovered by rescanning every row for every candidate.
+        var favouriteD2 = [] as Array<Long>;
+        var favouriteKeys = [] as Array;
+        for (var index = 0; index < rows.size(); index++) {
+            var row = rows[index] as Array;
+            var code = row[NearbyStopMaths.STOP_CODE] as Number;
+            if (favouriteSet.hasKey(code)) {
+                insertFavouriteByDistance(favouriteD2, favouriteKeys,
+                    NearbyStopMaths.distanceSquared(row[NearbyStopMaths.STOP_LAT_E5] as Number,
+                        row[NearbyStopMaths.STOP_LON_E5] as Number, lat, lon),
+                    keysFor(contexts, index));
+            }
+        }
+
         var nearby = [] as Array;
         var lastD2 = -1l;
         var lastCode = -1;
+        // Keys (as char arrays) of every stop already known to provide
+        // coverage: accepted candidates plus favourites nearer than the
+        // candidate currently being tested.
+        var providers = [] as Array;
+        var favouritePtr = 0;
         // Visit every candidate in (unrounded squared distance, code) order.
         // At most the loaded tile's validated rows can be examined.
         for (var scan = 0; scan < rows.size() && nearby.size() < n; scan++) {
@@ -33,7 +71,7 @@ class NearbyCoverageSelection {
             for (var i = 0; i < rows.size(); i++) {
                 var row = rows[i] as Array;
                 var code = row[NearbyStopMaths.STOP_CODE] as Number;
-                if (isFavourite(favourites, code)) {
+                if (favouriteSet.hasKey(code)) {
                     continue;
                 }
                 var d2 = NearbyStopMaths.distanceSquared(row[NearbyStopMaths.STOP_LAT_E5] as Number,
@@ -52,13 +90,23 @@ class NearbyCoverageSelection {
             }
             lastD2 = bestD2;
             lastCode = bestCode;
+
+            while (favouritePtr < favouriteD2.size() && (favouriteD2[favouritePtr] as Long) < bestD2) {
+                var provider = favouriteKeys[favouritePtr];
+                if (provider != null) {
+                    providers.add((provider as String).toCharArray());
+                }
+                favouritePtr++;
+            }
+
             var keys = keysFor(contexts, best);
             // Null, partial and empty keys never establish coverage.
-            if (keys != null && whollyCovered(keys as String, contexts, chosen,
-                                               bestD2, favourites, lat, lon)) {
+            if (keys != null && whollyCovered(keys as String, providers)) {
                 continue;
             }
-            chosen.add(best);
+            if (keys != null) {
+                providers.add((keys as String).toCharArray());
+            }
             var selected = rows[best] as Array;
             nearby.add([bestCode, selected[NearbyStopMaths.STOP_NAME],
                 NearbyStopMaths.metresFromSquared(bestD2)] as Array);
@@ -66,13 +114,21 @@ class NearbyCoverageSelection {
         return [nearby, legacy[1]] as Array;
     }
 
-    private static function isFavourite(codes as Array<Number>, code as Number) as Boolean {
-        for (var i = 0; i < codes.size(); i++) {
-            if (codes[i] == code) {
-                return true;
-            }
+    // Inserts (d2, keys) kept sorted ascending by d2. At most favourites.size()
+    // entries (16 at most) are ever held, so a plain insertion shift is cheap;
+    // this avoids depending on Array.sort(), which is not used elsewhere here.
+    private static function insertFavouriteByDistance(d2s as Array<Long>, keys as Array,
+                                                       d2 as Long, provider as String?) as Void {
+        d2s.add(d2);
+        keys.add(provider);
+        var pos = d2s.size() - 1;
+        while (pos > 0 && (d2s[pos - 1] as Long) > d2) {
+            d2s[pos] = d2s[pos - 1];
+            keys[pos] = keys[pos - 1];
+            pos--;
         }
-        return false;
+        d2s[pos] = d2;
+        keys[pos] = provider;
     }
 
     // Indices are global across the concatenated borrowed row arrays.
@@ -100,38 +156,12 @@ class NearbyCoverageSelection {
         return null;
     }
 
-    private static function whollyCovered(keys as String, contexts as Array,
-                                           chosen as Array,
-                                           candidateD2 as Long, favourites as Array<Number>,
-                                           lat as Number, lon as Number) as Boolean {
+    // providers are already-resolved char arrays (accepted candidates plus
+    // favourites nearer than this candidate); see select().
+    private static function whollyCovered(keys as String, providers as Array) as Boolean {
         // Decode only the candidate once. All comparisons use the validated
         // ascending two-digit base36 encoding, never route-name matching.
         var digits = keys.toCharArray();
-        // At most five retained stops and sixteen configured favourites.
-        // Convert each provider once per candidate, not once per digit pair.
-        var providers = [] as Array;
-        for (var j = 0; j < chosen.size(); j++) {
-            var provider = keysFor(contexts, chosen[j] as Number);
-            if (provider != null) {
-                providers.add((provider as String).toCharArray());
-            }
-        }
-        var index = 0;
-        for (var t = 0; t < contexts.size(); t++) {
-            var rows = (contexts[t] as Dictionary)["s"] as Array;
-            for (var r = 0; r < rows.size(); r++) {
-                var row = rows[r] as Array;
-                if (isFavourite(favourites, row[NearbyStopMaths.STOP_CODE] as Number) &&
-                    NearbyStopMaths.distanceSquared(row[NearbyStopMaths.STOP_LAT_E5] as Number,
-                        row[NearbyStopMaths.STOP_LON_E5] as Number, lat, lon) < candidateD2) {
-                    var provider = keysFor(contexts, index);
-                    if (provider != null) {
-                        providers.add((provider as String).toCharArray());
-                    }
-                }
-                index++;
-            }
-        }
         for (var k = 0; k < digits.size(); k += 2) {
             var covered = false;
             for (var j = 0; j < providers.size(); j++) {

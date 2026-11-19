@@ -83,6 +83,49 @@ beside the served tiles, and repeat with stale/offline data. These settings
 and GPS quality cannot be set by the host-only test runner. Never infer
 network or page behaviour from pure selection tests.
 
+## Real-device Mk1 finding, 19 Nov 2026: watchdog crash, fixed pending re-test
+
+A beta export of this branch was installed on a real Descent Mk1
+(Part-Number 006-B2859-00, Firmware 16.10, ConnectIQ 6.0.4) and crashed three
+times on 18 Nov 2026 with `Watchdog Tripped Error - Code Executed Too Long`,
+`Details: 'Failed invoking <symbol>'`, read from the device's
+`GARMIN/APPS/LOGS/CIQ_LOG.YML`. The stack (`pc: 0x10006119`, `pc: 0x100048c1`)
+was not symbolicated; no debug.xml/ERA download was available for this
+investigation. This is a CPU-time watchdog, not an out-of-memory error: it
+confirms real hardware is slower than assumed for at least one nearby code
+path, not the memory-margin risk this document previously called out.
+
+Root cause (by code inspection, not by reproducing the crash): a loaded tile
+can validly hold up to `NearbyServiceContext.MAX_STOPS` (292) rows, and
+`NearbyCoverageSelection.select()`/`whollyCovered()` re-scanned every row (and
+re-ran a full favourites membership and distance scan) for every rejected
+candidate, giving roughly O(rows² × favourites) work with no bound relative
+to a real stop cluster. This only runs synchronously inside the tile
+download's web request callback (`ChristchurchBusViewManager`'s `onTile`),
+exactly where the Connect IQ watchdog measures a single callback's run time.
+It was validated only against small synthetic fixtures (at most 40 rows, see
+above), never against a real, busier interchange-style cluster, and never
+timed on real hardware; the host simulator does not model real-device CPU
+speed any more than it models the real widget memory limit.
+
+Fix applied: `NearbyCoverageSelection` now builds a favourites lookup once
+instead of a linear scan per row per candidate, and precomputes the
+in-tile favourites sorted by distance once, folding each one into the
+covering-provider set at most once for the whole call (the candidate
+distance only ever grows during the scan, so this is a straightforward
+incremental rewrite, not a change to the selection rules). This removes the
+`× favourites` (up to 16) factor from both hot loops without changing which
+stops are chosen or in what order; every assertion in
+`NearbyCoverageSelectionTests.mc` was hand-traced against the rewritten code
+and matches. The existing SDK here (7.0.0 Beta1) cannot type-check or run
+this codebase (it predates several Toybox APIs this branch already uses, and
+its host simulator will not start on this machine: `libwebkit2gtk-4.0` is no
+longer packaged), so this fix has **not** been executed through
+`monkeydo -t`, run against a real-sized tile, or timed on any device or
+simulator. Re-run the full validation in "Reproduce locally" above (ideally
+with real or near-real stop-cluster density, not just the existing small
+fixtures) and repeat the real Mk1 walk before trusting this fix on hardware.
+
 ## Human-only Mk1 checklist: PENDING
 
 - Walk a real corridor: shared service and opposite directions, loops, and
@@ -92,6 +135,12 @@ network or page behaviour from pure selection tests.
   fewer, and a service key needed beyond the nearest 15 stops.
 - Walk more than 100 m, check position/refresh and cached/offline fallback,
   page navigation and wrap, and capture memory/error logs on a Descent Mk1.
+  Error logs are at `GARMIN/APPS/LOGS/CIQ_LOG.YML` (and `.BAK` for the
+  previous crash) over USB; they are overwritten by the next crash, so copy
+  them off before launching anything else. A busier real stop cluster
+  (shared/opposite-direction services, an interchange) is the scenario most
+  likely to retrigger a watchdog timeout; test near one, not only in a quiet
+  area.
 - Confirm title/glance reads cached data only on an officially compatible
   glance device; Mk1 has no widget glance.
 
