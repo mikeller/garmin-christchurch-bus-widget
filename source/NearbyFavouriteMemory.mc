@@ -22,11 +22,11 @@ class NearbyFavouriteMemory {
             return INVALID;
         }
         var record = value as Dictionary;
-        if (record["resetTime"] != null && !(record["resetTime"] instanceof Number)) {
+        if (record["resetTime"] != null && !StoredBusData.isStoredInteger(record["resetTime"])) {
             return INVALID;
         }
-        if (record["resetTime"] instanceof Number &&
-            (record["resetTime"] as Number) <= now) {
+        if (StoredBusData.isStoredInteger(record["resetTime"]) &&
+            StoredBusData.toStoredNumber(record["resetTime"]) <= now) {
             return EXPIRED;
         }
         if (restore(record, favourites, setting, now) != null) {
@@ -69,11 +69,12 @@ class NearbyFavouriteMemory {
             record["stopIndex"] instanceof Long &&
             (record["stopIndex"] as Long) >= 0l &&
             (record["stopIndex"] as Long) < favourites.size().toLong() &&
-            (record["resetTime"] == null || record["resetTime"] instanceof Number);
+            (record["resetTime"] == null || StoredBusData.isStoredInteger(record["resetTime"]));
         if (!legacyLong && !StoredBusData.validLastStop(record, favourites)) {
             return null;
         }
-        var expires = record["resetTime"] as Number?;
+        var storedReset = record["resetTime"];
+        var expires = storedReset != null ? StoredBusData.toStoredNumber(storedReset) : null;
         if (expires != null && (expires as Number) <= now) {
             return null;
         }

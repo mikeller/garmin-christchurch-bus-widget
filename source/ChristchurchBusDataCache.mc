@@ -104,9 +104,14 @@ class ChristchurchBusDataCache {
             Storage.deleteValue(Constants.LAST_STOP_INDEX_NAME);
             return null;
         }
-        var lastStopValue = stored as Dictionary<String, Number>?;
+        var lastStopValue = stored as Dictionary<String, Object>?;
         if (lastStopValue != null) {
-            var resetTimeValue = lastStopValue["resetTime"] as Number?;
+            // Storage.getValue() can return an originally-Number resetTime
+            // as Long (observed in the simulator); see
+            // StoredBusData.isStoredInteger().
+            var storedResetTime = lastStopValue["resetTime"];
+            var resetTimeValue = storedResetTime != null ?
+                StoredBusData.toStoredNumber(storedResetTime) : null;
             var resetTime = null;
             if (resetTimeValue != null) {
                 resetTime = new Time.Moment(resetTimeValue);

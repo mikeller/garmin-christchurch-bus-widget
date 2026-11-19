@@ -4,6 +4,21 @@ import Toybox.Lang;
 // an unvalidated persisted object straight into a page or departure view.
 (:glance)
 class StoredBusData {
+    // A value written as a Number (e.g. Time.Moment.value()) can come back
+    // from Storage.getValue() typed as Long instead, even well within
+    // 32-bit range; this was observed for "resetTime" via a real
+    // Storage.setValue()/getValue() round trip in the SDK 9.3.0 simulator
+    // (descentmk1), not yet confirmed on physical hardware. Treat both as
+    // the same persisted integer rather than rejecting an otherwise-valid
+    // record as malformed.
+    static function isStoredInteger(value as Object?) as Boolean {
+        return value instanceof Number || value instanceof Long;
+    }
+
+    static function toStoredNumber(value as Object) as Number {
+        return value instanceof Long ? (value as Long).toNumber() : value as Number;
+    }
+
     static function validStop(value as Object?) as Boolean {
         if (!(value instanceof Dictionary)) {
             return false;
@@ -19,7 +34,7 @@ class StoredBusData {
             return false;
         }
         var entry = value as Dictionary;
-        if (entry["resetTime"] != null && !(entry["resetTime"] instanceof Number)) {
+        if (entry["resetTime"] != null && !isStoredInteger(entry["resetTime"])) {
             return false;
         }
         if (entry["stopId"] != null) {

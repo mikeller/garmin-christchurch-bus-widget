@@ -126,6 +126,79 @@ simulator. Re-run the full validation in "Reproduce locally" above (ideally
 with real or near-real stop-cluster density, not just the existing small
 fixtures) and repeat the real Mk1 walk before trusting this fix on hardware.
 
+## Re-verification, 19 Nov 2026: working SDK 9.3.0 toolchain
+
+A working local toolchain became available (Connect IQ SDK 9.3.0, the
+`descentmk1` device profile, and a simulator reachable over `monkeydo -t`
+through a short-lived Docker container supplying the `libwebkit2gtk-4.0` ABI
+the simulator binary needs; see
+`/tmp/opencode/ciq-sdk-work/run-ciq-tests.sh` on the machine this was done
+on, not part of this repo). A `monkeydo -t` run against `descentmk1` on
+commit `b311cd2` (the coverage-selection performance fix above) found 79
+passed, 1 failed: `testNearbySelectionKeepsLastFavourite`, with all
+`NearbyCoverageSelectionTests.mc` and `NearbyIntegrationHeapTests.mc` tests
+passing.
+
+### Favourite-restore bug: Storage round-trips a Number as Long
+
+Root cause, confirmed by reproducing the failure and adding temporary debug
+output (not by inspection alone): `Time.Moment.value()`'s `resetTime` is
+written to `Storage` as what the compiler treats as `Lang.Number`, but
+`Storage.getValue()` returns it back typed as `Lang.Long`, confirmed via a
+real `Storage.setValue()`/`getValue()` round trip in the SDK 9.3.0 simulator
+on `descentmk1` (not yet confirmed on physical hardware; Monkey C's docs for
+`Time.Moment.value()` state `Lang.Number`). `StoredBusData.validLastStop()`
+required `entry["resetTime"] instanceof Number`, so a perfectly valid,
+unexpired restart record was rejected as malformed and discarded. This
+affects every reader of the shared `Constants.LAST_STOP_INDEX_NAME` record,
+including `ChristchurchBusDataCache.getLastStop()` — the pre-existing,
+non-nearby "remember last stop on startup" feature that predates this
+branch — not only the new nearby favourite-memory path. This is very likely
+the actual mechanism behind the previously reported "remembering the last
+favourite page shown still does not seem to work" symptom; the three
+previously listed hypotheses (`setLastStop`'s early-return on
+`favourites[0]`, `stopResetTimeMin` default-0 semantics, a nearby-only-exit
+problem) were investigated and are not the cause — each behaves as designed.
+
+Fix: `StoredBusData.isStoredInteger()`/`toStoredNumber()` now accept and
+normalise both `Number` and `Long` for a persisted integer, used by
+`StoredBusData.validLastStop()`, `NearbyFavouriteMemory.restore()` and
+`restoreReason()`, and `ChristchurchBusDataCache.getLastStop()`. `stopId`
+and `stopIndex` were not observed to round-trip as `Long` in this testing
+(only `resetTime`, the one field derived from `Time.Moment.value()`) and
+were left as `Number`-only checks; if a future report suggests otherwise,
+re-check them the same way. `NearbyStoredFix.mc`'s structurally similar
+`"at"`/`"savedAt"` fields (GPS fix caching, a different storage key) were
+**not** touched: no test currently fails there, and it is out of this
+fix's scope, but it uses the same `Time.Moment`-derived-timestamp-via-Storage
+pattern and is worth checking if a similar symptom is ever reported for GPS
+fix caching.
+
+All 80 existing tests plus one new timing test (below) passed under SDK
+9.3.0 on `descentmk1` after this fix, with no regressions to
+`NearbyCoverageSelectionTests.mc` or `NearbyIntegrationHeapTests.mc`.
+
+### Coverage-selection performance fix: re-verified, with timing evidence
+
+Under the working SDK 9.3.0 toolchain, `NearbyCoverageSelectionTests.mc` and
+`NearbyIntegrationHeapTests.mc` both pass on `descentmk1` (previously only
+confirmed by hand-tracing against a mismatched SDK). A new test,
+`testNearbyCoverageWorstCaseTiming` in `NearbyCoverageTimingTests.mc`
+(`:debug` only, not shipped), constructs a 160-row tile (the same scale as
+the existing "bounded tile full scan" coverage test; 292 rows is not
+reachable while staying `NearbyServiceContext.usable()`, since `MAX_BYTES`
+caps the practical row count well below the 292 array-size cap for any
+non-trivial name length) with 16 favourites and a key pattern designed so
+almost every candidate is rejected as covered, maximising scan iterations.
+Measured with `System.getTimer()` in the Dockerised host simulator (not real
+hardware, and not a true peak): the pre-fix algorithm (commit `794765a`)
+took 2,329 ms for this fixture; the fix (commit `b311cd2`) took 688 ms, a
+~3.4x improvement on this synthetic worst case. This is host-CPU evidence of
+a real, measured improvement with the expected direction and rough
+magnitude, not a substitute for timing on physical Mk1 hardware, and not a
+guarantee the remaining cost fits inside the watchdog's budget on a slower
+real CPU for an even larger real-world cluster.
+
 ## Human-only Mk1 checklist: PENDING
 
 - Walk a real corridor: shared service and opposite directions, loops, and
