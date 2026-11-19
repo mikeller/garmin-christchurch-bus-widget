@@ -29,6 +29,8 @@ class ChristchurchBusViewManager {
     (:nearby) private var tileReader as ChristchurchBusTileReader = new ChristchurchBusTileReader();
     (:nearby) private var nearbyEntries as Array = [] as Array;
     (:nearby) private var favouriteEntries as Array = [] as Array;
+    (:nearby) private var departureCandidates as Array = [] as Array;
+    (:nearby) private var departureFavourites as Array = [] as Array;
     (:nearby) private var fixAt as Number = 0;
     private var dataLat as Number?;
     private var dataLon as Number?;
@@ -356,6 +358,8 @@ class ChristchurchBusViewManager {
     private function clearNearby() as Void {
         nearbyEntries = [];
         favouriteEntries = [];
+        departureCandidates = [];
+        departureFavourites = [];
         fixAt = 0;
         dataLat = null;
         dataLon = null;
@@ -414,9 +418,41 @@ class ChristchurchBusViewManager {
         for (var i = 0; i < favourites.size(); i++) {
             codes.add(favourites[i]["stopId"] as Number);
         }
-        var split = NearbyCoverageSelection.select([context as Dictionary],
-            latest[0], latest[1], codes, ChristchurchBusAppProperties.nearbyStopsToShow());
-        nearbyEntries = split[0] as Array;
+        var count = ChristchurchBusAppProperties.nearbyStopsToShow();
+        var split = NearbyStopMaths.nearestSplit(stops, latest[0], latest[1], codes, count + 3);
+        departureCandidates = [];
+        var nearbyCandidates = split[0] as Array;
+        for (var i = 0; i < nearbyCandidates.size(); i++) {
+            var candidate = nearbyCandidates[i] as Array;
+            var id = candidate[NearbyStopMaths.ENTRY_CODE] as Number;
+            for (var j = 0; j < stops.size(); j++) {
+                var row = stops[j] as Array;
+                if (row[NearbyStopMaths.STOP_CODE] == id) {
+                    departureCandidates.add([id, NearbyStopMaths.distanceSquared(
+                        row[NearbyStopMaths.STOP_LAT_E5] as Number,
+                        row[NearbyStopMaths.STOP_LON_E5] as Number, latest[0], latest[1]),
+                        ChristchurchBusDataCache.tryGetCachedData(id, false), false,
+                        candidate[NearbyStopMaths.ENTRY_NAME],
+                        candidate[NearbyStopMaths.ENTRY_METRES]]);
+                    break;
+                }
+            }
+        }
+        departureFavourites = [];
+        for (var i = 0; i < stops.size(); i++) {
+            var row = stops[i] as Array;
+            var id = row[NearbyStopMaths.STOP_CODE] as Number;
+            for (var j = 0; j < codes.size(); j++) {
+                if (codes[j] == id) {
+                    departureFavourites.add([id, NearbyStopMaths.distanceSquared(
+                        row[NearbyStopMaths.STOP_LAT_E5] as Number,
+                        row[NearbyStopMaths.STOP_LON_E5] as Number, latest[0], latest[1]),
+                        ChristchurchBusDataCache.tryGetCachedData(id, false), true]);
+                    break;
+                }
+            }
+        }
+        selectDeparturePages(count);
         slotState = nearbyEntries.size() == 0 ? NearbyPageOrder.EMPTY : NearbyPageOrder.READY;
         slotCode = 0;
         tileRetryAt = 0;
@@ -459,6 +495,66 @@ class ChristchurchBusViewManager {
         ChristchurchBusDataCache.setNearbyStops(saved, fixAt);
         rebuildPages();
     }
+
+    (:nearby)
+    private function selectDeparturePages(count as Number) as Void {
+        var selected = NearbyDepartureCoverage.select(departureCandidates, departureFavourites, count);
+        var entries = [] as Array;
+        for (var i = 0; i < selected.size(); i++) {
+            var row = selected[i] as Array;
+            entries.add([row[0], row[4], row[5]]);
+        }
+        nearbyEntries = entries;
+    }
+
+    (:nearby)
+    private function updateDepartureSelection(data as Dictionary<String, String or Array>?,
+                                              handle as Number, completed as Boolean,
+                                              stale as Boolean) as Void {
+        if (!completed || departureCandidates.size() == 0) {
+            return;
+        }
+        var changed = false;
+        for (var i = 0; i < departureCandidates.size(); i++) {
+            var candidate = departureCandidates[i] as Array;
+            if (candidate[0] == handle) {
+                candidate[2] = stale ? null : data;
+                changed = true;
+                break;
+            }
+        }
+        for (var i = 0; i < departureFavourites.size(); i++) {
+            var favourite = departureFavourites[i] as Array;
+            if (favourite[0] == handle) {
+                favourite[2] = stale ? null : data;
+                changed = true;
+                break;
+            }
+        }
+        if (!changed) {
+            return;
+        }
+        var previous = nearbyEntries;
+        selectDeparturePages(ChristchurchBusAppProperties.nearbyStopsToShow());
+        var same = previous.size() == nearbyEntries.size();
+        if (same) {
+            for (var i = 0; i < previous.size(); i++) {
+                if ((previous[i] as Array)[0] != (nearbyEntries[i] as Array)[0]) {
+                    same = false;
+                    break;
+                }
+            }
+        }
+        if (!same) {
+            slotState = nearbyEntries.size() == 0 ? NearbyPageOrder.EMPTY : NearbyPageOrder.READY;
+            rebuildPages();
+        }
+    }
+
+    (:noNearby)
+    private function updateDepartureSelection(data as Dictionary<String, String or Array>?,
+                                              handle as Number, completed as Boolean,
+                                              stale as Boolean) as Void {}
 
     (:nearby)
     private function rebuildPages() as Void {
@@ -773,6 +869,7 @@ class ChristchurchBusViewManager {
 
     function onBusDataReady(data as Dictionary<String, String or Array>?, handle as Number,
                              requestIsCompleted as Boolean, dataIsStale as Boolean) as Void {
+        updateDepartureSelection(data, handle, requestIsCompleted, dataIsStale);
         updateFailed[handle] = NearbyDepartureState.failed(updateFailed[handle] == true,
             requestIsCompleted, dataIsStale, false);
         if (pages.size() > 0 && handle == pages[currentStopIndex]["stopId"]) {
