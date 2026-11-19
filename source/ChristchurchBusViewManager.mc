@@ -31,6 +31,8 @@ class ChristchurchBusViewManager {
     (:nearby) private var favouriteEntries as Array = [] as Array;
     (:nearby) private var departureCandidates as Array = [] as Array;
     (:nearby) private var departureFavourites as Array = [] as Array;
+    (:nearby) private var departureDropped as Dictionary<Number, Boolean> =
+        {} as Dictionary<Number, Boolean>;
     (:nearby) private var recheckAt as Dictionary<Number, Number> = {} as Dictionary<Number, Number>;
     (:nearby) private var recheckInFlight as Number?;
     (:nearby) private var recheckCursor as Number = 0;
@@ -207,6 +209,9 @@ class ChristchurchBusViewManager {
             var index = (recheckCursor + offset) % departureCandidates.size();
             var row = departureCandidates[index] as Array;
             var id = row[0] as Number;
+            if (departureDropped[id] != true) {
+                continue;
+            }
             var visible = false;
             for (var j = 0; j < nearbyEntries.size(); j++) {
                 if ((nearbyEntries[j] as Array)[0] == id) {
@@ -430,6 +435,7 @@ class ChristchurchBusViewManager {
         favouriteEntries = [];
         departureCandidates = [];
         departureFavourites = [];
+        departureDropped = {} as Dictionary<Number, Boolean>;
         recheckAt = {} as Dictionary<Number, Number>;
         recheckInFlight = null;
         recheckCursor = 0;
@@ -603,7 +609,14 @@ class ChristchurchBusViewManager {
 
     (:nearby)
     private function selectDeparturePages(count as Number) as Void {
-        var selected = NearbyDepartureCoverage.select(departureCandidates, departureFavourites, count);
+        var split = NearbyDepartureCoverage.split(departureCandidates, departureFavourites, count);
+        var selected = split[0] as Array;
+        var dropped = split[1] as Array;
+        var droppedCodes = {} as Dictionary<Number, Boolean>;
+        for (var j = 0; j < dropped.size(); j++) {
+            droppedCodes[(dropped[j] as Array)[0] as Number] = true;
+        }
+        departureDropped = droppedCodes;
         var entries = [] as Array;
         for (var i = 0; i < selected.size(); i++) {
             var row = selected[i] as Array;

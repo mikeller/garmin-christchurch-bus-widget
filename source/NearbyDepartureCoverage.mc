@@ -48,14 +48,21 @@ class NearbyDepartureCoverage {
     // The first n+3 non-favourites (at most eight) are considered. Incomplete
     // data stays visible and cannot hide another stop.
     static function select(entries as Array, favourites as Array, n as Number) as Array {
+        return split(entries, favourites, n)[0] as Array;
+    }
+
+    // [selected, coverageDropped]. Do not label stops beyond the page limit
+    // as dropped: their departure keys were never evaluated for coverage.
+    static function split(entries as Array, favourites as Array, n as Number) as Array {
+        var selected = [] as Array;
+        var dropped = [] as Array;
         if (n <= 0) {
-            return [] as Array;
+            return [selected, dropped];
         }
         var limit = n + 3;
         if (limit > 8) {
             limit = 8;
         }
-        var selected = [] as Array;
         var covered = [] as Array;
         var considered = 0;
         var favouriteKeys = [] as Array;
@@ -93,9 +100,11 @@ class NearbyDepartureCoverage {
                 if (candidateKeys != null) {
                     add(covered, candidateKeys as Array);
                 }
+            } else {
+                dropped.add(entry);
             }
         }
-        return selected;
+        return [selected, dropped];
     }
 
     private static function keysFor(entry as Array) as Array? {

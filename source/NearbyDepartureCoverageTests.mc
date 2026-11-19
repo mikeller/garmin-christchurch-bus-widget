@@ -23,6 +23,25 @@ function testNearbyDepartureCoverage(logger as Logger) as Boolean {
     Test.assertEqualMessage(1001, (selected[0] as Array)[0], "nearest retained");
     Test.assertEqualMessage(1003, (selected[1] as Array)[0], "different destination retained");
     Test.assertEqualMessage(1005, (selected[2] as Array)[0], "unknown retained");
+    var split = NearbyDepartureCoverage.split(entries, [] as Array, 3);
+    var dropped = split[1] as Array;
+    Test.assertEqualMessage(2, dropped.size(), "only examined, covered stops dropped");
+    Test.assertEqualMessage(1002, (dropped[0] as Array)[0], "shared departure dropped");
+    Test.assertEqualMessage(1004, (dropped[1] as Array)[0], "later covered stop dropped");
+    split = NearbyDepartureCoverage.split(
+        [[1001, 1l, shared, false], [1003, 4l, opposite, false],
+         [1002, 9l, shared, false], [1005, 16l, null, false]] as Array,
+        [] as Array, 2);
+    Test.assertEqualMessage(2, (split[0] as Array).size(), "page limit reached");
+    Test.assertEqualMessage(0, (split[1] as Array).size(),
+        "unexamined stops beyond page limit are not coverage-dropped");
+    split = NearbyDepartureCoverage.split(
+        [[1001, 1l, shared, false], [1002, 4l, shared, false],
+         [1003, 9l, null, false]] as Array, [] as Array, 2);
+    Test.assertEqualMessage(1002, ((split[1] as Array)[0] as Array)[0],
+        "covered stop before page limit is eligible for recheck");
+    Test.assertEqualMessage(1003, ((split[0] as Array)[1] as Array)[0],
+        "pending stop stays visible and is not dropped");
     Test.assertEqualMessage(1, NearbyDepartureCoverage.select(
         [[1002, 4l, shared, false]] as Array,
         [[2001, 4l, shared, true]] as Array, 3).size(), "equal-distance favourite does not cover");
