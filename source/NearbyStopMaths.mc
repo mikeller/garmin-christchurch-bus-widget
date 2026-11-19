@@ -93,6 +93,7 @@ class NearbyStopMaths {
 
     // Exact scaled squared distance (see LAT_SCALE) between two E5 points.
     static function distanceSquared(latE5a as Number, lonE5a as Number, latE5b as Number, lonE5b as Number) as Long {
+        NearbyWorkCount.distance();
         var dLat = clampDelta(latE5a - latE5b).toLong() * LAT_SCALE;
         var dLon = clampDelta(lonE5a - lonE5b).toLong() * LON_SCALE;
 

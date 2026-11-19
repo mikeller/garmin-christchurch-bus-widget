@@ -51,6 +51,7 @@ class ChristchurchBusViewManager {
     private var retryIndex as Number = -1;
     private var refreshTimer as Timer.Timer = new Timer.Timer();
     private var delayedRefreshRequested as Boolean = false;
+    private var displayRevision as Number = 0;
 
     function initialize(stops as Array<Dictionary>?) {
         if (stops != null) {
@@ -222,9 +223,25 @@ class ChristchurchBusViewManager {
     private function logPageDecision() as Void {}
 
     function manualRefresh() as Void {
+        traceWorkStart();
+        var before = displayRevision;
         refreshNearby(true);
-        displayBusesForCurrentStop();
+        // A synchronous cached-tile callback already rebuilt and displayed
+        // this page. Do not repeat Storage/title reads and departure scheduling.
+        if (displayRevision == before) {
+            displayBusesForCurrentStop();
+        }
+        traceWorkEnd();
     }
+
+    (:nearby)
+    private function traceWorkStart() as Void { NearbyWorkBudget.begin(); }
+    (:noNearby)
+    private function traceWorkStart() as Void {}
+    (:nearby)
+    private function traceWorkEnd() as Void { NearbyWorkBudget.report(); }
+    (:noNearby)
+    private function traceWorkEnd() as Void {}
 
     (:noNearby)
     private function refreshNearby(force as Boolean) as Void {}
@@ -371,6 +388,7 @@ class ChristchurchBusViewManager {
 
     (:nearby)
     function onTile(result as Number, context as Dictionary?, stale as Boolean) as Void {
+        NearbyWorkBudget.begin();
         var stops = context == null ? null : context["s"] as Array;
         if (nearbyLocation == null || (nearbyLocation as NearbyLocation).getState() != NearbyLocation.FIX) {
             return;
@@ -494,6 +512,7 @@ class ChristchurchBusViewManager {
         }
         ChristchurchBusDataCache.setNearbyStops(saved, fixAt);
         rebuildPages();
+        NearbyWorkBudget.report();
     }
 
     (:nearby)
@@ -653,6 +672,7 @@ class ChristchurchBusViewManager {
         if (pages.size() == 0) {
             return;
         }
+        displayRevision++;
         var stop = pages[currentStopIndex];
         if (isSlot(stop)) {
             showSlot();
