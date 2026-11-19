@@ -15,12 +15,19 @@ class ChristchurchBusTileReader {
     static const UNAVAILABLE = 3;
     static const DEFAULT_URL = "https://mikeller.github.io/garmin-christchurch-bus-widget";
     static const TTL_SECONDS = 259200; // three days
+    static const MAX_STOPS = 292;
+    static const MAX_BYTES = 4096;
     private static const INDEX_KEY = "nearby:tiles";
 
     private var pendingKey as String?;
     private var pendingCallback as Method?;
     private var indexKey as String = INDEX_KEY;
     private var failureCode as Number = 0;
+    // Only the last validated tile is held in memory. Its Storage record may
+    // be evicted, so invalidate this memo on every write or deletion path.
+    private var memoKey as String?;
+    private var memoTile as Dictionary?;
+    private var memoAt as Number = 0;
 
     function getFailureCode() as Number {
         return failureCode;
@@ -38,6 +45,7 @@ class ChristchurchBusTileReader {
     // JSON responseType produces a Dictionary for an object root. Reject
     // malformed data before it can reach the distance maths or persistent cache.
     static function validTile(body as Object?) as Boolean {
+        NearbyWorkCount.validate();
         if (!(body instanceof Dictionary)) {
             return false;
         }
@@ -62,7 +70,7 @@ class ChristchurchBusTileReader {
             return false;
         }
         var list = stops as Array;
-        if (list.size() > NearbyServiceContext.MAX_STOPS) {
+        if (list.size() > MAX_STOPS) {
             return false;
         }
         var previousCode = 0;
@@ -82,7 +90,20 @@ class ChristchurchBusTileReader {
             }
             previousCode = row[0] as Number;
         }
-        return NearbyServiceContext.plausibleBody(tile);
+        // Reject a core that cannot possibly fit the producer's 4096-byte
+        // payload cap. Unknown root keys are tolerated for forward compatibility.
+        var minimum = 20;
+        for (var j = 0; j < list.size(); j++) {
+            var row = list[j] as Array;
+            minimum += (row[0] as Number).toString().length() +
+                (row[1] as Number).toString().length() +
+                (row[2] as Number).toString().length() +
+                (row[3] as String).length() + 8;
+            if (minimum > MAX_BYTES) {
+                return false;
+            }
+        }
+        return true;
     }
 
     static function resultFor(responseCode as Number, body as Object?) as Number {
@@ -104,7 +125,7 @@ class ChristchurchBusTileReader {
         var key = ty.toString() + "," + tx.toString();
         var cached = readCache(key, false);
         if (cached != null) {
-            callback.invoke(READY, NearbyServiceContext.context(cached, true), false);
+            callback.invoke(READY, cached, false);
             return true;
         }
         if (!System.getDeviceSettings().connectionAvailable) {
@@ -116,7 +137,7 @@ class ChristchurchBusTileReader {
         // immediately while a replacement tile is requested.
         var stale = readCache(key, true);
         if (stale != null) {
-            callback.invoke(READY, NearbyServiceContext.context(stale, false), true);
+            callback.invoke(READY, stale, true);
         }
         if (!NearbyRequestSlots.acquire()) {
             return false;
@@ -161,10 +182,7 @@ class ChristchurchBusTileReader {
         var result = resultFor(responseCode, body);
         if (result == READY) {
             var tile = body as Dictionary;
-            var context = NearbyServiceContext.context(tile, true);
-            if (!NearbyServiceContext.usable(tile)) {
-                stripMetadata(tile);
-            }
+            var context = tile;
             writeCache(key as String, tile);
             callback.invoke(READY, context, false);
         } else if (result == OFFLINE) {
@@ -177,7 +195,7 @@ class ChristchurchBusTileReader {
     private function deliverOffline(key as String, callback as Method) as Void {
         var stale = readCache(key, true);
         if (stale != null) {
-            callback.invoke(READY, NearbyServiceContext.context(stale, false), true);
+            callback.invoke(READY, stale, true);
         } else {
             callback.invoke(OFFLINE, null, false);
         }
@@ -185,6 +203,13 @@ class ChristchurchBusTileReader {
 
     function readCache(key as String, allowExpired as Boolean) as Dictionary? {
         try {
+            var now = Time.now().value();
+            if (indexKey == INDEX_KEY && memoKey != null && (memoKey as String).equals(key) &&
+                memoTile != null && now >= memoAt &&
+                (allowExpired || now - memoAt < TTL_SECONDS)) {
+                return memoTile;
+            }
+            NearbyWorkCount.read();
             var entry = Storage.getValue("nearby:" + key);
             if (!(entry instanceof Dictionary)) {
                 return null;
@@ -196,18 +221,19 @@ class ChristchurchBusTileReader {
                 !(data["g"] instanceof String) ||
                 !((data["g"] as String).equals((tile as Dictionary)["g"]))) {
                 Storage.deleteValue("nearby:" + key);
+                if (memoKey != null && (memoKey as String).equals(key)) {
+                    memoKey = null;
+                    memoTile = null;
+                }
                 return null;
             }
             if (!allowExpired && (Time.now().value() - (fetched as Number) >= TTL_SECONDS ||
                                    Time.now().value() < (fetched as Number))) {
                 return null;
             }
-            // Offline legacy rows remain usable; expired/future metadata does not.
-            if (Time.now().value() < (fetched as Number) ||
-                Time.now().value() - (fetched as Number) >= TTL_SECONDS ||
-                !NearbyServiceContext.usable(tile as Dictionary)) {
-                stripMetadata(tile as Dictionary);
-            }
+            memoKey = key;
+            memoTile = tile as Dictionary;
+            memoAt = fetched as Number;
             return tile as Dictionary;
         } catch (e) {
             return null;
@@ -217,13 +243,26 @@ class ChristchurchBusTileReader {
     // Only inspect validated, unexpired tiles already in Storage. A title
     // lookup must never start another network request or Position acquisition.
     function cachedRowsFor(stopId as Number) as Array? {
+        NearbyWorkCount.title();
         try {
+            if (indexKey == INDEX_KEY && memoTile != null && Time.now().value() >= memoAt &&
+                Time.now().value() - memoAt < TTL_SECONDS) {
+                var memoRows = (memoTile as Dictionary)["s"] as Array;
+                for (var m = 0; m < memoRows.size(); m++) {
+                    NearbyWorkCount.iteration();
+                    if ((memoRows[m] as Array)[0] == stopId) {
+                        return memoRows;
+                    }
+                }
+            }
+            NearbyWorkCount.read();
             var stored = Storage.getValue(indexKey);
             if (!(stored instanceof Array)) {
                 return null;
             }
             var keys = stored as Array;
             for (var i = keys.size(); i > 0; i--) {
+                NearbyWorkCount.iteration();
                 var key = keys[i - 1];
                 if (!(key instanceof String)) {
                     continue;
@@ -234,6 +273,7 @@ class ChristchurchBusTileReader {
                 }
                 var rows = (tile as Dictionary)["s"] as Array;
                 for (var j = 0; j < rows.size(); j++) {
+                    NearbyWorkCount.iteration();
                     var row = rows[j] as Array;
                     if ((row[0] as Number) == stopId) {
                         return rows;
@@ -247,15 +287,14 @@ class ChristchurchBusTileReader {
     }
 
     function writeCache(key as String, tile as Dictionary) as Void {
+        memoKey = null;
+        memoTile = null;
         // The documented per-value cap is 32 KB; actual object-store capacity
         // varies by device. A tile is <= 4096 UTF-8 bytes on the wire, but
         // parsed objects have overhead. A failed write must not lose the tile
         // just fetched or affect live departures.
         var storageKey = "nearby:" + key;
         try {
-            if (!NearbyServiceContext.usable(tile)) {
-                stripMetadata(tile);
-            }
             var old = Storage.getValue(indexKey);
             var previous = old instanceof Array ? old as Array : [] as Array;
             var keys = [] as Array;
@@ -294,12 +333,4 @@ class ChristchurchBusTileReader {
         Storage.setValue(key, value);
     }
 
-    private static function stripMetadata(tile as Dictionary) as Void {
-        tile.remove("m");
-        tile.remove("sh");
-        tile.remove("K");
-        tile.remove("i");
-        tile.remove("p");
-        tile.remove("k");
-    }
 }

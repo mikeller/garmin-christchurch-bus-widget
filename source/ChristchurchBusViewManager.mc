@@ -281,7 +281,7 @@ class ChristchurchBusViewManager {
                 if (force || NearbyRefreshPolicy.shouldRefresh(lat, lon, selectedLat,
                     selectedLon, selectedAt, Time.now().value())) {
                     onTile(ChristchurchBusTileReader.READY,
-                        NearbyServiceContext.context(cached as Dictionary, true), false);
+                        cached as Dictionary, false);
                 } else if (NearbyRefreshPolicy.shouldUpdateDistances(lat, lon,
                     (nearbyLocation as NearbyLocation).getFixTime(), dataLat, dataLon,
                     fixAt, dataPending)) {

@@ -15,6 +15,12 @@ class ChristchurchBusTileTestData {
 function testTileValidation(logger as Logger) as Boolean {
     var tile = ChristchurchBusTileTestData.tile();
     Test.assertMessage(ChristchurchBusTileReader.validTile(tile), "valid raw name");
+    tile["m"] = 2;
+    tile["i"] = ["unrecognised"];
+    Test.assertMessage(ChristchurchBusTileReader.validTile(tile),
+        "extra root metadata tolerated without using it");
+    tile.remove("m");
+    tile.remove("i");
     tile["s"] = [] as Array;
     Test.assertMessage(ChristchurchBusTileReader.validTile(tile), "empty tile");
     tile["v"] = 2;
