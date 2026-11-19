@@ -21,6 +21,15 @@ class ChristchurchBusDataReader {
     }
 
     function getBusData(stopId as Number, handle as Number, callback as Method(data as Dictionary<String, String or Array>?, handle as Number, requestIsCompleted as Boolean, dataIsStale as Boolean) as Void) as Boolean {
+        return fetch(stopId, handle, callback, false);
+    }
+
+    (:nearby)
+    function recheckBusData(stopId as Number, handle as Number, callback as Method(data as Dictionary<String, String or Array>?, handle as Number, requestIsCompleted as Boolean, dataIsStale as Boolean) as Void) as Boolean {
+        return fetch(stopId, handle, callback, true);
+    }
+
+    private function fetch(stopId as Number, handle as Number, callback as Method(data as Dictionary<String, String or Array>?, handle as Number, requestIsCompleted as Boolean, dataIsStale as Boolean) as Void, bypassCache as Boolean) as Boolean {
         if (concurrentRequestCount >= Constants.MAX_CONCURRENT_REQUESTS) {
             Utils.log("Concurrent request limit reached for handle: " + handle);
 
@@ -29,7 +38,7 @@ class ChristchurchBusDataReader {
             concurrentRequestCount++;
         }
 
-        var cache = ChristchurchBusDataCache.tryGetCachedData(stopId, false);
+        var cache = bypassCache ? null : ChristchurchBusDataCache.tryGetCachedData(stopId, false);
         if (cache != null) {
             callback.invoke(cache as Dictionary<String, String or Array>, handle, true, false);
 

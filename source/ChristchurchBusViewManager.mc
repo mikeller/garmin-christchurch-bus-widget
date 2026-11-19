@@ -31,6 +31,10 @@ class ChristchurchBusViewManager {
     (:nearby) private var favouriteEntries as Array = [] as Array;
     (:nearby) private var departureCandidates as Array = [] as Array;
     (:nearby) private var departureFavourites as Array = [] as Array;
+    (:nearby) private var recheckAt as Dictionary<Number, Number> = {} as Dictionary<Number, Number>;
+    (:nearby) private var recheckInFlight as Number?;
+    (:nearby) private var recheckCursor as Number = 0;
+    (:nearby) private static const RECHECK_ENABLED = true;
     (:nearby) private var fixAt as Number = 0;
     private var dataLat as Number?;
     private var dataLon as Number?;
@@ -171,6 +175,7 @@ class ChristchurchBusViewManager {
             return;
         }
         var oldIndex = currentStopIndex;
+        var previousPage = pages[oldIndex];
         currentStopIndex = nextPageIndex(currentStopIndex, pages.size());
         if (retainedNearby != null && pages[oldIndex]["stopId"] == retainedNearby) {
             var nextPage = pages[currentStopIndex];
@@ -180,7 +185,55 @@ class ChristchurchBusViewManager {
         }
         logSelectDecision(oldIndex, currentStopIndex, pages.size());
         ChristchurchBusDataCache.rememberFavouritePage(pages[currentStopIndex], favourites);
+        recheckAfterSelect(previousPage, pages[currentStopIndex]);
     }
+
+    (:nearby)
+    private function recheckAfterSelect(before as Dictionary, after as Dictionary) as Void {
+        if (!RECHECK_ENABLED || after["nearby"] != true ||
+            recheckInFlight != null || departureCandidates.size() == 0) {
+            return;
+        }
+        var now = Time.now().value();
+        if (cycleStartedAt < 0 || now < cycleStartedAt ||
+            now - cycleStartedAt >= Constants.REFRESH_DELAY_S) {
+            cycleStartedAt = now;
+            requestsThisCycle = 0;
+        }
+        if (requestsThisCycle >= 8) {
+            return;
+        }
+        for (var offset = 0; offset < departureCandidates.size(); offset++) {
+            var index = (recheckCursor + offset) % departureCandidates.size();
+            var row = departureCandidates[index] as Array;
+            var id = row[0] as Number;
+            var visible = false;
+            for (var j = 0; j < nearbyEntries.size(); j++) {
+                if ((nearbyEntries[j] as Array)[0] == id) {
+                    visible = true;
+                    break;
+                }
+            }
+            var at = recheckAt[id] as Number?;
+            if (!NearbyRecheckPolicy.eligible(true, RECHECK_ENABLED,
+                recheckInFlight != null, requestsThisCycle, visible,
+                reader.isRunning(id), at, now)) {
+                continue;
+            }
+            recheckInFlight = id;
+            if (reader.recheckBusData(id, id, method(:onBusDataReady))) {
+                requestsThisCycle++;
+                recheckAt[id] = now;
+                recheckCursor = (index + 1) % departureCandidates.size();
+            } else {
+                recheckInFlight = null;
+            }
+            return;
+        }
+    }
+
+    (:noNearby)
+    private function recheckAfterSelect(before as Dictionary, after as Dictionary) as Void {}
 
     (:nearby)
     private function nextPageIndex(index as Number, count as Number) as Number {
@@ -377,6 +430,9 @@ class ChristchurchBusViewManager {
         favouriteEntries = [];
         departureCandidates = [];
         departureFavourites = [];
+        recheckAt = {} as Dictionary<Number, Number>;
+        recheckInFlight = null;
+        recheckCursor = 0;
         fixAt = 0;
         dataLat = null;
         dataLon = null;
@@ -438,6 +494,14 @@ class ChristchurchBusViewManager {
         }
         var count = ChristchurchBusAppProperties.nearbyStopsToShow();
         var split = NearbyStopMaths.nearestSplit(stops, latest[0], latest[1], codes, count + 3);
+        var previousCandidates = departureCandidates;
+        var previousFavourites = departureFavourites;
+        var sameSessionTile = false;
+        if (dataLat != null && dataLon != null) {
+            var oldTileId = NearbyStopMaths.tileId(dataLat as Number, dataLon as Number);
+            sameSessionTile = oldTileId[0] == (latestTile as Array)[0] &&
+                oldTileId[1] == (latestTile as Array)[1];
+        }
         departureCandidates = [];
         var nearbyCandidates = split[0] as Array;
         for (var i = 0; i < nearbyCandidates.size(); i++) {
@@ -446,10 +510,17 @@ class ChristchurchBusViewManager {
             for (var j = 0; j < stops.size(); j++) {
                 var row = stops[j] as Array;
                 if (row[NearbyStopMaths.STOP_CODE] == id) {
+                    var liveData = ChristchurchBusDataCache.tryGetCachedData(id, false);
+                    if (liveData == null && sameSessionTile) {
+                        liveData = previousDepartureData(previousCandidates, id);
+                    }
+                    if (liveData != null && recheckAt[id] == null) {
+                        recheckAt[id] = Time.now().value();
+                    }
                     departureCandidates.add([id, NearbyStopMaths.distanceSquared(
                         row[NearbyStopMaths.STOP_LAT_E5] as Number,
                         row[NearbyStopMaths.STOP_LON_E5] as Number, latest[0], latest[1]),
-                        ChristchurchBusDataCache.tryGetCachedData(id, false), false,
+                        liveData, false,
                         candidate[NearbyStopMaths.ENTRY_NAME],
                         candidate[NearbyStopMaths.ENTRY_METRES]]);
                     break;
@@ -462,10 +533,14 @@ class ChristchurchBusViewManager {
             var id = row[NearbyStopMaths.STOP_CODE] as Number;
             for (var j = 0; j < codes.size(); j++) {
                 if (codes[j] == id) {
+                    var liveData = ChristchurchBusDataCache.tryGetCachedData(id, false);
+                    if (liveData == null && sameSessionTile) {
+                        liveData = previousDepartureData(previousFavourites, id);
+                    }
                     departureFavourites.add([id, NearbyStopMaths.distanceSquared(
                         row[NearbyStopMaths.STOP_LAT_E5] as Number,
                         row[NearbyStopMaths.STOP_LON_E5] as Number, latest[0], latest[1]),
-                        ChristchurchBusDataCache.tryGetCachedData(id, false), true]);
+                        liveData, true]);
                     break;
                 }
             }
@@ -516,6 +591,17 @@ class ChristchurchBusViewManager {
     }
 
     (:nearby)
+    private function previousDepartureData(entries as Array, id as Number) as Dictionary? {
+        for (var i = 0; i < entries.size(); i++) {
+            var row = entries[i] as Array;
+            if (row[0] == id) {
+                return row[2] as Dictionary?;
+            }
+        }
+        return null;
+    }
+
+    (:nearby)
     private function selectDeparturePages(count as Number) as Void {
         var selected = NearbyDepartureCoverage.select(departureCandidates, departureFavourites, count);
         var entries = [] as Array;
@@ -530,14 +616,20 @@ class ChristchurchBusViewManager {
     private function updateDepartureSelection(data as Dictionary<String, String or Array>?,
                                               handle as Number, completed as Boolean,
                                               stale as Boolean) as Void {
-        if (!completed || departureCandidates.size() == 0) {
+        if (completed && !stale && reader.isRunning(handle)) {
+            recheckAt[handle] = Time.now().value();
+        }
+        if (completed && recheckInFlight == handle) {
+            recheckInFlight = null;
+        }
+        if (!completed || stale || departureCandidates.size() == 0) {
             return;
         }
         var changed = false;
         for (var i = 0; i < departureCandidates.size(); i++) {
             var candidate = departureCandidates[i] as Array;
             if (candidate[0] == handle) {
-                candidate[2] = stale ? null : data;
+                candidate[2] = data;
                 changed = true;
                 break;
             }
@@ -545,7 +637,7 @@ class ChristchurchBusViewManager {
         for (var i = 0; i < departureFavourites.size(); i++) {
             var favourite = departureFavourites[i] as Array;
             if (favourite[0] == handle) {
-                favourite[2] = stale ? null : data;
+                favourite[2] = data;
                 changed = true;
                 break;
             }

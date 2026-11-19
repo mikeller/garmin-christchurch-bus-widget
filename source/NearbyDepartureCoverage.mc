@@ -48,6 +48,9 @@ class NearbyDepartureCoverage {
     // The first n+3 non-favourites (at most eight) are considered. Incomplete
     // data stays visible and cannot hide another stop.
     static function select(entries as Array, favourites as Array, n as Number) as Array {
+        if (n <= 0) {
+            return [] as Array;
+        }
         var limit = n + 3;
         if (limit > 8) {
             limit = 8;
@@ -55,6 +58,10 @@ class NearbyDepartureCoverage {
         var selected = [] as Array;
         var covered = [] as Array;
         var considered = 0;
+        var favouriteKeys = [] as Array;
+        for (var f = 0; f < favourites.size(); f++) {
+            favouriteKeys.add(keysFor(favourites[f] as Array));
+        }
         for (var i = 0; i < entries.size() && considered < limit && selected.size() < n; i++) {
             var entry = entries[i] as Array;
             var isFavourite = entry[3] == true;
@@ -68,7 +75,7 @@ class NearbyDepartureCoverage {
                 for (var f = 0; f < favourites.size(); f++) {
                     var favourite = favourites[f] as Array;
                     if ((favourite[1] as Long) < (entry[1] as Long)) {
-                        var provider = keysFor(favourite);
+                        var provider = favouriteKeys[f];
                         if (provider != null) {
                             add(covered, provider as Array);
                         }
