@@ -9,6 +9,7 @@ class NearbyWorkBudget {
     static var titles as Number = 0;
     static var distances as Number = 0;
     static var iterations as Number = 0;
+    static var visits as Number = 0;
     static var start as Number = 0;
 
     static function begin() as Void {
@@ -17,6 +18,7 @@ class NearbyWorkBudget {
         titles = 0;
         distances = 0;
         iterations = 0;
+        visits = 0;
         start = System.getTimer();
     }
 
@@ -24,7 +26,7 @@ class NearbyWorkBudget {
         System.println("Nearby work budget: ms=" + (System.getTimer() - start) +
             " storage=" + reads + " validates=" + validates +
             " titles=" + titles + " distance=" + distances +
-            " iterations=" + iterations);
+            " iterations=" + iterations + " visits=" + visits);
     }
 }
 
@@ -37,6 +39,7 @@ class NearbyWorkBudget {
     static function title() as Void {}
     static function distance() as Void {}
     static function iteration() as Void {}
+    static function visit() as Void {}
 }
 
 (:debug, :nearby)
@@ -46,6 +49,7 @@ class NearbyWorkCount {
     static function title() as Void { NearbyWorkBudget.titles++; }
     static function distance() as Void { NearbyWorkBudget.distances++; }
     static function iteration() as Void { NearbyWorkBudget.iterations++; }
+    static function visit() as Void { NearbyWorkBudget.visits++; }
 }
 
 (:release, :nearby)
@@ -55,4 +59,5 @@ class NearbyWorkCount {
     static function title() as Void {}
     static function distance() as Void {}
     static function iteration() as Void {}
+    static function visit() as Void {}
 }
