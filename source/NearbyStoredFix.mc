@@ -101,6 +101,7 @@ class NearbyStoredFix {
 
     static function read(now as Number) as Dictionary? {
         try {
+            NearbyWorkCount.read();
             var stored = Storage.getValue(KEY);
             return valid(stored, now) ? stored as Dictionary : null;
         } catch (e) {

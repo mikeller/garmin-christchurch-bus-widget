@@ -115,7 +115,7 @@ class NearbyStopMaths {
     // present in the tile. Refresh its distance before retaining its page.
     static function metresForCode(rows as Array, id as Number, lat as Number,
                                   lon as Number) as Number? {
-        for (var i = 0; i < rows.size(); i++) {
+        for (var i = 0; i < rows.size(); i++) { NearbyWorkCount.iteration();
             var row = rows[i] as Array;
             if (row[STOP_CODE] == id) {
                 return approxMetres(row[STOP_LAT_E5] as Number,
@@ -150,13 +150,20 @@ class NearbyStopMaths {
     // favouriteCodes is the configured favourites as stop code Numbers
     // (16 at most). Two bounded passes, no full sort.
     static function nearestSplit(stops as Array, latE5 as Number, lonE5 as Number, favouriteCodes as Array<Number>, n as Number) as Array {
-        var nonFavourites = selectNearest(stops, latE5, lonE5, n, favouriteCodes);
+        // A linear membership scan for every tile row costs 56 * 16 on Mk1.
+        // Build this bounded lookup once, retaining the original ordering and
+        // distance tie-break rules in both nearest passes.
+        var favouriteSet = {} as Dictionary<Number, Boolean>;
+        for (var f = 0; f < favouriteCodes.size(); f++) { NearbyWorkCount.iteration();
+            favouriteSet[favouriteCodes[f]] = true;
+        }
+        var nonFavourites = selectNearest(stops, latE5, lonE5, n, favouriteSet);
 
         var overall = selectNearest(stops, latE5, lonE5, n, null);
         var favouriteNearby = [] as Array;
-        for (var i = 0; i < overall.size(); i++) {
+        for (var i = 0; i < overall.size(); i++) { NearbyWorkCount.iteration();
             var entry = overall[i] as Array;
-            if (contains(favouriteCodes, entry[ENTRY_CODE] as Number)) {
+            if (favouriteSet.hasKey(entry[ENTRY_CODE] as Number)) {
                 favouriteNearby.add(entry);
             }
         }
@@ -176,16 +183,16 @@ class NearbyStopMaths {
             leading = favourites.size();
         }
 
-        for (var i = 0; i < leading; i++) {
+        for (var i = 0; i < leading; i++) { NearbyWorkCount.iteration();
             pages.add(favouritePage(favourites[i], favouriteNearby));
         }
 
-        for (var i = 0; i < nonFavouriteNearby.size(); i++) {
+        for (var i = 0; i < nonFavouriteNearby.size(); i++) { NearbyWorkCount.iteration();
             var entry = nonFavouriteNearby[i] as Array;
             pages.add([entry[ENTRY_CODE], entry[ENTRY_NAME], entry[ENTRY_METRES], false] as Array);
         }
 
-        for (var i = leading; i < favourites.size(); i++) {
+        for (var i = leading; i < favourites.size(); i++) { NearbyWorkCount.iteration();
             pages.add(favouritePage(favourites[i], favouriteNearby));
         }
 
@@ -194,7 +201,7 @@ class NearbyStopMaths {
 
     private static function favouritePage(code as Number, favouriteNearby as Array) as Array {
         var metres = null;
-        for (var i = 0; i < favouriteNearby.size(); i++) {
+        for (var i = 0; i < favouriteNearby.size(); i++) { NearbyWorkCount.iteration();
             var entry = favouriteNearby[i] as Array;
             if ((entry[ENTRY_CODE] as Number) == code) {
                 metres = entry[ENTRY_METRES];
@@ -206,9 +213,10 @@ class NearbyStopMaths {
     }
 
     // Bounded insertion selection of the n nearest stops (skipping any stop
-    // whose code is in skipCodes, if given). Memory: three arrays of at most
+    // whose code is in skipSet, if given). Memory: three arrays of at most
     // n elements plus the result entries.
-    private static function selectNearest(stops as Array, latE5 as Number, lonE5 as Number, n as Number, skipCodes as Array<Number>?) as Array {
+    private static function selectNearest(stops as Array, latE5 as Number, lonE5 as Number,
+                                          n as Number, skipSet as Dictionary<Number, Boolean>?) as Array {
         var result = [] as Array;
         if (n <= 0) {
             return result;
@@ -219,10 +227,10 @@ class NearbyStopMaths {
         var bestD2 = [] as Array<Long>;
         var bestCode = [] as Array<Number>;
 
-        for (var i = 0; i < stops.size(); i++) {
+        for (var i = 0; i < stops.size(); i++) { NearbyWorkCount.iteration();
             var stop = stops[i] as Array;
             var code = stop[STOP_CODE] as Number;
-            if (skipCodes != null && contains(skipCodes, code)) {
+            if (skipSet != null && (skipSet as Dictionary<Number, Boolean>).hasKey(code)) {
                 continue;
             }
 
@@ -232,7 +240,7 @@ class NearbyStopMaths {
             // or equally near with a lower code.
             var count = bestD2.size();
             var pos = count;
-            while (pos > 0 && (d2 < bestD2[pos - 1] || (d2 == bestD2[pos - 1] && code < bestCode[pos - 1]))) {
+            while (pos > 0 && (d2 < bestD2[pos - 1] || (d2 == bestD2[pos - 1] && code < bestCode[pos - 1]))) { NearbyWorkCount.iteration();
                 pos--;
             }
 
@@ -250,7 +258,7 @@ class NearbyStopMaths {
                 last = count;
             }
 
-            for (var j = last; j > pos; j--) {
+            for (var j = last; j > pos; j--) { NearbyWorkCount.iteration();
                 best[j] = best[j - 1];
                 bestD2[j] = bestD2[j - 1];
                 bestCode[j] = bestCode[j - 1];
@@ -260,7 +268,7 @@ class NearbyStopMaths {
             bestCode[pos] = code;
         }
 
-        for (var i = 0; i < best.size(); i++) {
+        for (var i = 0; i < best.size(); i++) { NearbyWorkCount.iteration();
             var stop = best[i] as Array;
             result.add([stop[STOP_CODE], stop[STOP_NAME], metresFromSquared(bestD2[i])] as Array);
         }
@@ -269,7 +277,7 @@ class NearbyStopMaths {
     }
 
     private static function contains(codes as Array<Number>, code as Number) as Boolean {
-        for (var i = 0; i < codes.size(); i++) {
+        for (var i = 0; i < codes.size(); i++) { NearbyWorkCount.iteration();
             if (codes[i] == code) {
                 return true;
             }

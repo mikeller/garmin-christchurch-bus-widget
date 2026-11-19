@@ -29,9 +29,11 @@ class NearbyPageNames {
         var first = 0;
         var last = text.length();
         while (first < last && " \t\r\n".find(text.substring(first, first + 1)) != null) {
+            NearbyWorkCount.iteration();
             first++;
         }
         while (last > first && " \t\r\n".find(text.substring(last - 1, last)) != null) {
+            NearbyWorkCount.iteration();
             last--;
         }
         return text.substring(first, last) as String;
@@ -40,6 +42,7 @@ class NearbyPageNames {
     private static function displayTileName(code as Number, rows as Array) as String? {
         var raw = null as String?;
         for (var i = 0; i < rows.size(); i++) {
+            NearbyWorkCount.iteration();
             var row = rows[i];
             if (row instanceof Array && (row as Array).size() == 4 &&
                 (row as Array)[0] instanceof Number && (row as Array)[0] == code &&
@@ -53,6 +56,7 @@ class NearbyPageNames {
         }
         var cleanName = clean(raw as String);
         for (var i = 0; i < rows.size(); i++) {
+            NearbyWorkCount.iteration();
             var other = rows[i];
             if (other instanceof Array && (other as Array).size() == 4 &&
                 (other as Array)[0] instanceof Number && (other as Array)[0] != code &&
@@ -73,6 +77,7 @@ class NearbyPageNames {
         var raw = entry[NearbyStopMaths.ENTRY_NAME] as String;
         var cleanName = clean(raw);
         for (var i = 0; i < nearby.size(); i++) {
+            NearbyWorkCount.iteration();
             var other = nearby[i] as Array;
             if (other[NearbyStopMaths.ENTRY_CODE] != entry[NearbyStopMaths.ENTRY_CODE] &&
                 cleanName.equals(clean(other[NearbyStopMaths.ENTRY_NAME] as String))) {

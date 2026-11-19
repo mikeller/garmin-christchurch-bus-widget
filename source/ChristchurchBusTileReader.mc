@@ -59,7 +59,7 @@ class ChristchurchBusTileReader {
             return false;
         }
         var date = generation as String;
-        for (var i = 0; i < date.length(); i++) {
+        for (var i = 0; i < date.length(); i++) { NearbyWorkCount.iteration();
             if (i != 4 && i != 7 && "0123456789".find(date.substring(i, i + 1)) == null) {
                 return false;
             }
@@ -74,7 +74,7 @@ class ChristchurchBusTileReader {
             return false;
         }
         var previousCode = 0;
-        for (var i = 0; i < list.size(); i++) {
+        for (var i = 0; i < list.size(); i++) { NearbyWorkCount.iteration();
             var stop = list[i];
             if (!(stop instanceof Array) || (stop as Array).size() != 4) {
                 return false;
@@ -93,7 +93,7 @@ class ChristchurchBusTileReader {
         // Reject a core that cannot possibly fit the producer's 4096-byte
         // payload cap. Unknown root keys are tolerated for forward compatibility.
         var minimum = 20;
-        for (var j = 0; j < list.size(); j++) {
+        for (var j = 0; j < list.size(); j++) { NearbyWorkCount.iteration();
             var row = list[j] as Array;
             minimum += (row[0] as Number).toString().length() +
                 (row[1] as Number).toString().length() +
@@ -204,7 +204,7 @@ class ChristchurchBusTileReader {
     function readCache(key as String, allowExpired as Boolean) as Dictionary? {
         try {
             var now = Time.now().value();
-            if (indexKey == INDEX_KEY && memoKey != null && (memoKey as String).equals(key) &&
+            if (INDEX_KEY.equals(indexKey) && memoKey != null && (memoKey as String).equals(key) &&
                 memoTile != null && now >= memoAt &&
                 (allowExpired || now - memoAt < TTL_SECONDS)) {
                 return memoTile;
@@ -245,7 +245,7 @@ class ChristchurchBusTileReader {
     function cachedRowsFor(stopId as Number) as Array? {
         NearbyWorkCount.title();
         try {
-            if (indexKey == INDEX_KEY && memoTile != null && Time.now().value() >= memoAt &&
+            if (INDEX_KEY.equals(indexKey) && memoTile != null && Time.now().value() >= memoAt &&
                 Time.now().value() - memoAt < TTL_SECONDS) {
                 var memoRows = (memoTile as Dictionary)["s"] as Array;
                 for (var m = 0; m < memoRows.size(); m++) {
@@ -295,12 +295,13 @@ class ChristchurchBusTileReader {
         // just fetched or affect live departures.
         var storageKey = "nearby:" + key;
         try {
+            NearbyWorkCount.read();
             var old = Storage.getValue(indexKey);
             var previous = old instanceof Array ? old as Array : [] as Array;
             var keys = [] as Array;
             // Index order is oldest to newest. Retain the most recently used
             // previous tile, not the oldest one being evicted.
-            for (var i = previous.size(); i > 0; i--) {
+            for (var i = previous.size(); i > 0; i--) { NearbyWorkCount.iteration();
                 var candidate = previous[i - 1];
                 if (candidate instanceof String && !(candidate as String).equals(key) &&
                     keys.size() < 1) {
@@ -317,7 +318,7 @@ class ChristchurchBusTileReader {
                 Storage.deleteValue(storageKey);
                 return;
             }
-            for (var i = 0; i < previous.size(); i++) {
+            for (var i = 0; i < previous.size(); i++) { NearbyWorkCount.iteration();
                 if (previous[i] instanceof String && !(previous[i] as String).equals(key) &&
                     !(previous[i] as String).equals(keys[0])) {
                     Storage.deleteValue("nearby:" + previous[i]);

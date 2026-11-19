@@ -209,6 +209,7 @@ class ChristchurchBusDataCache {
                 return null;
             }
             for (var i = 0; i < (rows as Array).size(); i++) {
+                NearbyWorkCount.iteration();
                 var row = (rows as Array)[i] as Array;
                 if (stopId == null || row[0] == stopId) {
                     return {"stopId" => row[0], "displayName" => row[1], "nearbyAt" => at};

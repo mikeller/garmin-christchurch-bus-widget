@@ -25,21 +25,39 @@ class NearbyDepartureCoverage {
             if (!(visit instanceof Dictionary)) {
                 return null;
             }
-            var line = (visit as Dictionary)["PublishedLineName"];
-            var destination = (visit as Dictionary)["DestinationName"];
-            if (!(line instanceof String) || !(destination instanceof String) ||
-                (line as String).length() == 0 || (destination as String).length() == 0) {
+            var rawLine = (visit as Dictionary)["PublishedLineName"];
+            var rawDestination = (visit as Dictionary)["DestinationName"];
+            if (!(rawLine instanceof String) || !(rawDestination instanceof String)) {
+                return null;
+            }
+            var line = trimField(rawLine as String);
+            var destination = trimField(rawDestination as String);
+            if (line.length() == 0 || destination.length() == 0) {
                 return null;
             }
             // Length-prefix the first field so any punctuation in either
             // field remains unambiguous. Do not case-fold or truncate names.
-            var key = (line as String).length().toString() + ":" + line + destination;
+            var key = line.length().toString() + ":" + line + destination;
             if (!seen.hasKey(key)) {
                 seen[key] = true;
                 result.add(key);
             }
         }
         return result;
+    }
+
+    // Monkey C String has no trim(). Keep the source fields unchanged, and
+    // normalise only surrounding whitespace before making a coverage key.
+    private static function trimField(value as String) as String {
+        var start = 0;
+        var end = value.length();
+        while (start < end && " \t\n\r\f".find(value.substring(start, start + 1)) != null) {
+            start++;
+        }
+        while (end > start && " \t\n\r\f".find(value.substring(end - 1, end)) != null) {
+            end--;
+        }
+        return value.substring(start, end);
     }
 
     // Entry index 2 holds accumulated keys, index 6 their membership
@@ -56,6 +74,29 @@ class NearbyDepartureCoverage {
             }
         }
         return mergeInto(entry, keys(data));
+    }
+
+    // A cache-hit callback may fire synchronously during page construction.
+    // Only completed network responses are observed here; the cache seeder
+    // handles cache hits outside the tile/display callback.
+    static function observeResponse(candidates as Array, favourites as Array,
+                                    id as Number, data as Dictionary?,
+                                    completed as Boolean, stale as Boolean,
+                                    live as Boolean) as Boolean {
+        if (!completed || stale || !live) {
+            return false;
+        }
+        for (var group = 0; group < 2; group++) {
+            var entries = group == 0 ? candidates : favourites;
+            for (var i = 0; i < entries.size(); i++) {
+                var entry = entries[i] as Array;
+                if (entry[0] == id) {
+                    entry[8] = true;
+                    return observe(entry, data);
+                }
+            }
+        }
+        return false;
     }
 
     private static function overflow(entry as Array) as Boolean {

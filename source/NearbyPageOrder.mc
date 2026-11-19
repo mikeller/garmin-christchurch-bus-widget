@@ -22,6 +22,7 @@ class NearbyPageOrder {
         }
         var withSlot = [] as Array;
         for (var i = 0; i <= ordered.size(); i++) {
+            NearbyWorkCount.iteration();
             if (i == at) {
                 withSlot.add([null, null, null, false] as Array);
             }
@@ -48,6 +49,7 @@ class NearbyPageOrder {
         if (oldPage != null) {
             var id = (oldPage as Dictionary)["stopId"] as Number?;
             for (var i = 0; i < newPages.size(); i++) {
+                NearbyWorkCount.iteration();
                 if (id != null && newPages[i]["stopId"] == id) {
                     return i;
                 }
@@ -57,6 +59,7 @@ class NearbyPageOrder {
             }
             if (id == null) {
                 for (var j = 0; j < newPages.size(); j++) {
+                    NearbyWorkCount.iteration();
                     if (newPages[j]["nearby"] == true) {
                         return j;
                     }

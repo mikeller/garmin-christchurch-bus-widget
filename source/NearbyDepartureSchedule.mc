@@ -18,8 +18,10 @@ class NearbyDepartureSchedule {
             used.add(current);
         }
         while (chosen.size() < cap) {
+            NearbyWorkCount.iteration();
             var best = -1;
             for (var step = 0; step < entries.size(); step++) {
+                NearbyWorkCount.iteration();
                 var index = (current + step) % entries.size();
                 if (!eligible(entries, index, inFlight, used)) {
                     continue;
@@ -54,11 +56,13 @@ class NearbyDepartureSchedule {
             return false;
         }
         for (var i = 0; i < inFlight.size(); i++) {
+            NearbyWorkCount.iteration();
             if (inFlight[i] == id) {
                 return false;
             }
         }
         for (var i = 0; i < used.size(); i++) {
+            NearbyWorkCount.iteration();
             if (used[i] == index || (entries[used[i]] as Array)[0] == id) {
                 return false;
             }

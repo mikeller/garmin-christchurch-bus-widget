@@ -145,8 +145,13 @@ function testNearbySyntheticSelectionWorkBudget(logger as Logger) as Boolean {
     NearbyDepartureCoverage.split(candidates, providers, 5);
     Test.assertMessage(NearbyWorkBudget.visits <= 24 * 32,
         "eight candidates and sixteen favourites parse at most 32 visits each");
-    Test.assertMessage(NearbyWorkBudget.iterations <= 2048,
-        "bounded synthetic selection and key merge iterations");
+    // This test deliberately parses and merges all 24 x 32 responses in a
+    // single call. The earlier 2048 bound counted coverage loops only; the
+    // instrumentation now also counts both nearest-selection passes.
+    // The actual manualRefresh callback has a separate strict 2000 budget
+    // and must parse zero visits.
+    Test.assertMessage(NearbyWorkBudget.iterations <= 3072,
+        "bounded synthetic selection, key parsing and merging iterations");
     Test.assertMessage(NearbyWorkBudget.distances <= 2 * 56,
         "nearest split calculates no more than two distances per row");
     Test.assertEqualMessage(0, NearbyWorkBudget.reads, "pure test performs no Storage reads");
@@ -267,5 +272,104 @@ function testCoverageDroppedRecheckAndPageIdentity(logger as Logger) as Boolean 
     var index = NearbyPageOrder.preserve(oldPage, pages, 0);
     Test.assertEqualMessage(2, index, "selected index follows its stop");
     Test.assertEqualMessage(1003, pages[index]["stopId"], "selected stop unchanged");
+    return true;
+}
+
+(:test, :nearby)
+function testTrimmedResponseKeysAndNavigationCoverage(logger as Logger) as Boolean {
+    var provider = [2001, 1l, null, true, null, null,
+        {} as Dictionary<String, Boolean>, false] as Array;
+    var candidate = NearbyDepartureCoverageTestData.prepare(
+        [[1001, 4l, NearbyDepartureCoverageTestData.data("8", "City"), false],
+         [1002, 9l, NearbyDepartureCoverageTestData.data("8", "Airport"), false]] as Array);
+    Test.assertMessage(NearbyDepartureCoverage.observe(provider,
+        NearbyDepartureCoverageTestData.data(" \t8 ", " City\r\n")),
+        "response trims both fields before observing");
+    Test.assertEqualMessage(0, (NearbyDepartureCoverage.split(
+        [candidate[0]] as Array, [provider], 1)[0] as Array).size(),
+        "trimmed live response covers the matching candidate");
+    Test.assertEqualMessage(1, (NearbyDepartureCoverage.split(
+        [candidate[1]] as Array, [provider], 1)[0] as Array).size(),
+        "different destination remains visible");
+    Test.assertMessage(NearbyDepartureCoverage.observe(provider,
+        NearbyDepartureCoverageTestData.data("8", "Airport")),
+        "later response adds a new key without revoking the old one");
+    Test.assertEqualMessage(0, (NearbyDepartureCoverage.split(
+        candidate, [provider], 2)[0] as Array).size(),
+        "both candidate keys remain covered after the later response");
+    Test.assertEqualMessage(2, (provider[2] as Array).size(),
+        "session holds one key per distinct trimmed line and destination");
+    Test.assertMessage(NearbyDepartureCoverage.keys(
+        NearbyDepartureCoverageTestData.data("  ", "City")) == null,
+        "whitespace-only line is unknown");
+    Test.assertMessage(NearbyDepartureCoverage.keys(
+        NearbyDepartureCoverageTestData.data("8", "\t ")) == null,
+        "whitespace-only destination is unknown");
+    var caseSensitive = NearbyDepartureCoverageTestData.prepare(
+        [[1003, 16l, NearbyDepartureCoverageTestData.data("8", "city"), false]] as Array);
+    Test.assertEqualMessage(1, NearbyDepartureCoverage.select(caseSensitive,
+        [provider], 1).size(), "case is not folded");
+    var sameDistance = NearbyDepartureCoverageTestData.prepare(
+        [[1004, 1l, NearbyDepartureCoverageTestData.data("8", "City"), false]] as Array);
+    Test.assertEqualMessage(1, NearbyDepartureCoverage.select(sameDistance,
+        [provider], 1).size(), "equal-distance favourite cannot cover");
+    var moved = [2001, 1l, null, true, null, null,
+        {} as Dictionary<String, Boolean>, false] as Array;
+    Test.assertEqualMessage(1, NearbyDepartureCoverage.select(
+        [candidate[0]] as Array, [moved], 1).size(),
+        "movement starts a new unknown coverage session");
+    Test.assertMessage(!NearbyRecheckPolicy.eligible(true, true, false, 0,
+        false, false, 80, 200), "navigation at exactly 120 seconds cannot recheck");
+    Test.assertMessage(NearbyRecheckPolicy.eligible(true, true, false, 0,
+        false, false, 79, 200), "navigation after 120 seconds can recheck");
+    Test.assertMessage(!NearbyRecheckPolicy.eligible(true, true, true, 0,
+        false, false, 79, 200), "one inflight recheck at a time");
+    return true;
+}
+
+(:test, :nearby)
+function testNearbyResponseWiringDefersCachedKeys(logger as Logger) as Boolean {
+    var candidate = [1001, 4l, null, false, "Stop", 3,
+        {} as Dictionary<String, Boolean>, false, false] as Array;
+    var favourite = [2001, 1l, null, true, null, null,
+        {} as Dictionary<String, Boolean>, false, false] as Array;
+    var candidates = [candidate] as Array;
+    var favourites = [favourite] as Array;
+    var data = NearbyDepartureCoverageTestData.data(" 8 ", " City ");
+    NearbyWorkBudget.begin();
+    Test.assertMessage(!NearbyDepartureCoverage.observeResponse(candidates,
+        favourites, 1001, data, true, false, false),
+        "synchronous cache callback defers parsing until timer tick");
+    Test.assertEqualMessage(0, NearbyWorkBudget.visits,
+        "cached callback in tile/display path parses no departures");
+    Test.assertMessage(candidate[8] == false && candidate[2] == null,
+        "candidate remains unknown pending cache seed");
+    Test.assertMessage(NearbyDepartureCoverage.observeResponse(candidates,
+        favourites, 1001, data, true, false, true),
+        "completed live response is observed once");
+    Test.assertEqualMessage(1, NearbyWorkBudget.visits, "one visit parsed per response");
+    Test.assertMessage(candidate[8] == true, "live response supersedes pending seed");
+    Test.assertMessage(!NearbyDepartureCoverage.observeResponse(candidates,
+        favourites, 2001, data, true, true, true),
+        "stale response cannot establish favourite coverage");
+    Test.assertMessage(NearbyDepartureCoverage.observeResponse(candidates,
+        favourites, 2001, data, true, false, true),
+        "favourite-only response is wired to its entry");
+    Test.assertEqualMessage(2, NearbyWorkBudget.visits,
+        "one visit per completed response, no candidate reparse");
+    Test.assertEqualMessage(0, (NearbyDepartureCoverage.split(candidates,
+        favourites, 1)[0] as Array).size(),
+        "closer favourite suppresses the trimmed candidate");
+    var oversized = [] as Array;
+    for (var i = 0; i <= NearbyDepartureCoverage.MAX_VISITS; i++) {
+        oversized.add({"PublishedLineName" => "8", "DestinationName" => "City"});
+    }
+    Test.assertMessage(NearbyDepartureCoverage.observeResponse(candidates,
+        favourites, 2001, {"MonitoredStopVisit" => oversized} as Dictionary,
+        true, false, true), "oversized live response invalidates favourite coverage");
+    Test.assertMessage(favourite[7] == true && favourite[2] == null,
+        "overflow leaves favourite unknown for this session");
+    Test.assertEqualMessage(1, NearbyDepartureCoverage.select(candidates,
+        favourites, 1).size(), "overflow restores formerly suppressed stop");
     return true;
 }
