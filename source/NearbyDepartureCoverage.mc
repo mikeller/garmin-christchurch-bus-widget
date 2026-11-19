@@ -5,6 +5,7 @@ import Toybox.Lang;
 (:nearby)
 class NearbyDepartureCoverage {
     static const MAX_VISITS = 32;
+    static const MAX_SESSION_KEYS = 32;
 
     static function keys(data as Dictionary?) as Array? {
         if (data == null || data["ErrorCondition"] != null) {
@@ -41,11 +42,33 @@ class NearbyDepartureCoverage {
         return result;
     }
 
-    // Entry index 2 is the accumulated key array, index 6 its membership
-    // dictionary. Merge only completed responses; a no-info response cannot
-    // revoke an already observed provider key in this location session.
+    // Entry index 2 holds accumulated keys, index 6 their membership
+    // dictionary, and index 7 a sticky overflow flag. Never use an incomplete
+    // union to suppress a stop after the per-session cap is exceeded.
+    static function observe(entry as Array, data as Dictionary?) as Boolean {
+        if (entry[7] == true) {
+            return false;
+        }
+        if (data != null && data["ErrorCondition"] == null) {
+            var visits = data["MonitoredStopVisit"];
+            if (visits instanceof Array && (visits as Array).size() > MAX_VISITS) {
+                return overflow(entry);
+            }
+        }
+        return mergeInto(entry, keys(data));
+    }
+
+    private static function overflow(entry as Array) as Boolean {
+        entry[2] = null;
+        entry[6] = {} as Dictionary<String, Boolean>;
+        entry[7] = true;
+        return true;
+    }
+
+    // Merge only completed responses; a no-info response cannot revoke
+    // already observed keys unless the response exceeds the safety bound.
     static function mergeInto(entry as Array, fresh as Array?) as Boolean {
-        if (fresh == null) {
+        if (fresh == null || entry[7] == true) {
             return false;
         }
         var changed = false;
@@ -59,6 +82,9 @@ class NearbyDepartureCoverage {
             NearbyWorkCount.iteration();
             var key = (fresh as Array)[i] as String;
             if (!index.hasKey(key)) {
+                if ((accumulated as Array).size() >= MAX_SESSION_KEYS) {
+                    return overflow(entry);
+                }
                 index[key] = true;
                 (accumulated as Array).add(key);
                 changed = true;

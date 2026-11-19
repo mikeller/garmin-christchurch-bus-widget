@@ -14,7 +14,7 @@ class NearbyDepartureCoverageTestData {
         for (var i = 0; i < raw.size(); i++) {
             var row = raw[i] as Array;
             var entry = [row[0], row[1], null, row[3], null, null,
-                {} as Dictionary<String, Boolean>] as Array;
+                {} as Dictionary<String, Boolean>, false] as Array;
             NearbyDepartureCoverage.mergeInto(entry,
                 NearbyDepartureCoverage.keys(row[2] as Dictionary?));
             result.add(entry);
@@ -89,7 +89,7 @@ function testNearbyBoundedKeysAndMonotonicCoverage(logger as Logger) as Boolean 
     Test.assertEqualMessage(32, NearbyWorkBudget.visits,
         "oversized response examined no visits");
     var provider = [2001, 1l, null, true, null, null,
-        {} as Dictionary<String, Boolean>] as Array;
+        {} as Dictionary<String, Boolean>, false] as Array;
     NearbyDepartureCoverage.mergeInto(provider,
         NearbyDepartureCoverage.keys(NearbyDepartureCoverageTestData.data("8", "City")));
     Test.assertMessage(!NearbyDepartureCoverage.mergeInto(provider, null),
@@ -132,13 +132,13 @@ function testNearbySyntheticSelectionWorkBudget(logger as Logger) as Boolean {
     for (var i = 0; i < nearest.size(); i++) {
         var entry = nearest[i] as Array;
         var provider = [entry[0], (i + 1).toLong(), null, false,
-            entry[1], entry[2], {} as Dictionary<String, Boolean>] as Array;
+            entry[1], entry[2], {} as Dictionary<String, Boolean>, false] as Array;
         NearbyDepartureCoverage.mergeInto(provider, NearbyDepartureCoverage.keys(data));
         candidates.add(provider);
     }
     for (var i = 0; i < favourites.size(); i++) {
         var provider = [favourites[i], (i + 9).toLong(), null, true,
-            null, null, {} as Dictionary<String, Boolean>] as Array;
+            null, null, {} as Dictionary<String, Boolean>, false] as Array;
         NearbyDepartureCoverage.mergeInto(provider, NearbyDepartureCoverage.keys(data));
         providers.add(provider);
     }
@@ -152,5 +152,55 @@ function testNearbySyntheticSelectionWorkBudget(logger as Logger) as Boolean {
     Test.assertEqualMessage(0, NearbyWorkBudget.reads, "pure test performs no Storage reads");
     Test.assertEqualMessage(0, NearbyWorkBudget.validates, "pure test validates no tile");
     Test.assertEqualMessage(0, NearbyWorkBudget.titles, "pure test performs no title lookup");
+    return true;
+}
+
+(:test, :nearby)
+function testNearbySessionKeyOverflowRestoresStops(logger as Logger) as Boolean {
+    var provider = [2001, 1l, null, true, null, null,
+        {} as Dictionary<String, Boolean>, false] as Array;
+    var candidate = NearbyDepartureCoverageTestData.prepare(
+        [[1002, 4l, NearbyDepartureCoverageTestData.data("8", "City"), false]] as Array);
+    var initial = NearbyDepartureCoverageTestData.data("8", "City");
+    Test.assertMessage(NearbyDepartureCoverage.observe(provider, initial),
+        "initial provider key");
+    for (var i = 1; i < NearbyDepartureCoverage.MAX_SESSION_KEYS; i++) {
+        NearbyDepartureCoverage.observe(provider,
+            NearbyDepartureCoverageTestData.data("Line " + i, "Destination " + i));
+    }
+    Test.assertEqualMessage(32, (provider[2] as Array).size(), "exactly at cap usable");
+    Test.assertEqualMessage(0,
+        (NearbyDepartureCoverage.split(candidate, [provider], 1)[0] as Array).size(),
+        "proven shared candidate initially dropped");
+    Test.assertMessage(NearbyDepartureCoverage.observe(provider,
+        NearbyDepartureCoverageTestData.data("New", "Terminus")), "33rd distinct key overflows");
+    Test.assertMessage(provider[7] == true && provider[2] == null,
+        "overflow is unknown, not a truncated covering set");
+    Test.assertEqualMessage(1,
+        (NearbyDepartureCoverage.split(candidate, [provider], 1)[0] as Array).size(),
+        "coverage no longer provable, dropped stop restored");
+    Test.assertEqualMessage(0, NearbyPageOrder.preserve(
+        {"stopId" => 1002, "nearby" => true},
+        [{"stopId" => 1002, "nearby" => true}] as Array<Dictionary>, 0),
+        "restoring coverage does not move the viewed nearby page");
+    Test.assertEqualMessage(0, (provider[6] as Dictionary).size(), "old keys released");
+    Test.assertMessage(!NearbyDepartureCoverage.observe(provider, initial),
+        "overflow stays unknown until movement resets session");
+    var moved = [2001, 1l, null, true, null, null,
+        {} as Dictionary<String, Boolean>, false] as Array;
+    Test.assertMessage(NearbyDepartureCoverage.observe(moved, initial),
+        "new movement session accepts fresh bounded keys");
+    Test.assertEqualMessage(0,
+        (NearbyDepartureCoverage.split(candidate, [moved], 1)[0] as Array).size(),
+        "new session may prove coverage again");
+    var large = [] as Array;
+    for (var i = 0; i <= NearbyDepartureCoverage.MAX_VISITS; i++) {
+        large.add({"PublishedLineName" => "8", "DestinationName" => "City"});
+    }
+    Test.assertMessage(NearbyDepartureCoverage.observe(moved,
+        {"MonitoredStopVisit" => large} as Dictionary), "oversized response overflows");
+    Test.assertEqualMessage(1,
+        (NearbyDepartureCoverage.split(candidate, [moved], 1)[0] as Array).size(),
+        "oversized response cannot suppress with previously cached keys");
     return true;
 }

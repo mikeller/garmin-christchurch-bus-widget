@@ -537,11 +537,11 @@ class ChristchurchBusViewManager {
                         prior == null ? null : (prior as Array)[2], false,
                         candidate[NearbyStopMaths.ENTRY_NAME],
                         candidate[NearbyStopMaths.ENTRY_METRES],
-                        prior == null ? {} as Dictionary<String, Boolean> : (prior as Array)[6]] as Array;
+                        prior == null ? {} as Dictionary<String, Boolean> : (prior as Array)[6],
+                        prior == null ? false : (prior as Array)[7]] as Array;
                     if (prior == null) {
                         var liveData = ChristchurchBusDataCache.tryGetCachedData(id, false);
-                        NearbyDepartureCoverage.mergeInto(candidateEntry,
-                            NearbyDepartureCoverage.keys(liveData));
+                        NearbyDepartureCoverage.observe(candidateEntry, liveData);
                         if (liveData != null && recheckAt[id] == null) {
                             recheckAt[id] = Time.now().value();
                         }
@@ -562,11 +562,11 @@ class ChristchurchBusViewManager {
                         row[NearbyStopMaths.STOP_LAT_E5] as Number,
                         row[NearbyStopMaths.STOP_LON_E5] as Number, latest[0], latest[1]),
                         prior == null ? null : (prior as Array)[2], true, null, null,
-                        prior == null ? {} as Dictionary<String, Boolean> : (prior as Array)[6]] as Array;
+                        prior == null ? {} as Dictionary<String, Boolean> : (prior as Array)[6],
+                        prior == null ? false : (prior as Array)[7]] as Array;
                     if (prior == null) {
-                        NearbyDepartureCoverage.mergeInto(favouriteEntry,
-                            NearbyDepartureCoverage.keys(
-                                ChristchurchBusDataCache.tryGetCachedData(id, false)));
+                        NearbyDepartureCoverage.observe(favouriteEntry,
+                            ChristchurchBusDataCache.tryGetCachedData(id, false));
                     }
                     departureFavourites.add(favouriteEntry);
                     break;
@@ -663,19 +663,18 @@ class ChristchurchBusViewManager {
         if (!completed || stale || departureCandidates.size() == 0) {
             return;
         }
-        var freshKeys = NearbyDepartureCoverage.keys(data);
         var changed = false;
         for (var i = 0; i < departureCandidates.size(); i++) {
             var candidate = departureCandidates[i] as Array;
             if (candidate[0] == handle) {
-                changed = NearbyDepartureCoverage.mergeInto(candidate, freshKeys);
+                changed = NearbyDepartureCoverage.observe(candidate, data);
                 break;
             }
         }
         for (var i = 0; i < departureFavourites.size(); i++) {
             var favourite = departureFavourites[i] as Array;
             if (favourite[0] == handle) {
-                changed = NearbyDepartureCoverage.mergeInto(favourite, freshKeys);
+                changed = NearbyDepartureCoverage.observe(favourite, data);
                 break;
             }
         }
@@ -996,7 +995,7 @@ class ChristchurchBusViewManager {
                     break;
                 }
             }
-            if (!NearbyCandidatePolicy.shouldRequest(row[2] as Array?,
+            if (!NearbyCandidatePolicy.shouldRequest(row[2] as Array?, row[7] == true,
                 candidateAttempted[id] == true, onPage, reader.isRunning(id),
                 candidateInFlight != null, requestsThisCycle)) {
                 continue;
