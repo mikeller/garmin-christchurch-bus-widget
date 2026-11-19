@@ -333,7 +333,7 @@ class ChristchurchBusViewManager {
             return;
         }
         if (sameTile && fixAt != 0) {
-            // A tile has at most 15 validated rows. Read it once per accepted
+            // Read the validated tile once per accepted
             // fix, not onUpdate, to refresh distances without a network call.
             var cached = tileReader.readCache(tile[0].toString() + "," +
                 tile[1].toString(), false);
@@ -513,11 +513,12 @@ class ChristchurchBusViewManager {
             sameSessionTile = oldTileId[0] == (latestTile as Array)[0] &&
                 oldTileId[1] == (latestTile as Array)[1];
         }
-        var keepHistory = sameSessionTile && selectedLat != null && selectedLon != null &&
-            !(NearbyRefreshPolicy.shouldRefresh(latest[0], latest[1], selectedLat,
-                selectedLon, selectedAt, Time.now().value()) &&
-              NearbyStopMaths.movedMoreThan(latest[0], latest[1],
-                  selectedLat as Number, selectedLon as Number, 5));
+        var keepHistory = NearbyRefreshPolicy.keepDepartureHistory(sameSessionTile,
+            latest[0], latest[1], selectedLat, selectedLon);
+        var moved = selectedLat != null && selectedLon != null &&
+            NearbyStopMaths.movedMoreThan(latest[0], latest[1],
+                selectedLat as Number, selectedLon as Number,
+                NearbyRefreshPolicy.MOVING_METRES);
         if (!keepHistory) {
             recheckAt = {} as Dictionary<Number, Number>;
             candidateAttempted = {} as Dictionary<Number, Boolean>;
@@ -539,7 +540,7 @@ class ChristchurchBusViewManager {
                         candidate[NearbyStopMaths.ENTRY_METRES],
                         prior == null ? {} as Dictionary<String, Boolean> : (prior as Array)[6],
                         prior == null ? false : (prior as Array)[7]] as Array;
-                    if (prior == null) {
+                    if (prior == null && !moved) {
                         var liveData = ChristchurchBusDataCache.tryGetCachedData(id, false);
                         NearbyDepartureCoverage.observe(candidateEntry, liveData);
                         if (liveData != null && recheckAt[id] == null) {
@@ -564,7 +565,7 @@ class ChristchurchBusViewManager {
                         prior == null ? null : (prior as Array)[2], true, null, null,
                         prior == null ? {} as Dictionary<String, Boolean> : (prior as Array)[6],
                         prior == null ? false : (prior as Array)[7]] as Array;
-                    if (prior == null) {
+                    if (prior == null && !moved) {
                         NearbyDepartureCoverage.observe(favouriteEntry,
                             ChristchurchBusDataCache.tryGetCachedData(id, false));
                     }

@@ -91,6 +91,43 @@ function testTileCacheBoundAndExpiry(logger as Logger) as Boolean {
 }
 
 (:test, :nearby)
+function testTileExtraRootKeysSurviveCache(logger as Logger) as Boolean {
+    var reader = new ChristchurchBusTileReader();
+    reader.useTestIndex();
+    var oldIndex = Storage.getValue("nearby:test-index");
+    var oldTile = Storage.getValue("nearby:test-extra-root");
+    try {
+        Storage.deleteValue("nearby:test-index");
+        Storage.deleteValue("nearby:test-extra-root");
+        var tile = ChristchurchBusTileTestData.tile();
+        tile["m"] = 2;
+        tile["i"] = ["not used by the widget"];
+        Test.assertEqualMessage(ChristchurchBusTileReader.READY,
+            ChristchurchBusTileReader.resultFor(200, tile),
+            "v1 tile with optional m=2 and extra root keys is accepted");
+        reader.writeCache("test-extra-root", tile);
+        var cached = reader.readCache("test-extra-root", false);
+        Test.assertMessage(cached != null, "extra root keys do not invalidate cache");
+        Test.assertEqualMessage(2, (cached as Dictionary)["m"],
+            "cache preserves optional metadata without interpreting it");
+        Test.assertEqualMessage(53090, (((cached as Dictionary)["s"] as Array)[0] as Array)[0],
+            "validated stop row survives cache round trip");
+    } finally {
+        if (oldTile == null) {
+            Storage.deleteValue("nearby:test-extra-root");
+        } else {
+            Storage.setValue("nearby:test-extra-root", oldTile as PropertyValueType);
+        }
+        if (oldIndex == null) {
+            Storage.deleteValue("nearby:test-index");
+        } else {
+            Storage.setValue("nearby:test-index", oldIndex as PropertyValueType);
+        }
+    }
+    return true;
+}
+
+(:test, :nearby)
 function testCachedFavouriteTitleRows(logger as Logger) as Boolean {
     var index = Storage.getValue("nearby:test-index");
     var previous = Storage.getValue("nearby:test-title");

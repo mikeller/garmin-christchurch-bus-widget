@@ -31,4 +31,15 @@ class NearbyRefreshPolicy {
             (metres > MOVING_METRES && (lastRequest < 0 ||
                 now - lastRequest >= MOVING_SECONDS));
     }
+
+    // Called only when the manager accepts a full nearest-set rebuild.
+    // A forced, stationary rebuild retains observed departure coverage;
+    // movement resets it even when a manual refresh bypassed the rate limit.
+    static function keepDepartureHistory(sameTile as Boolean, lat as Number,
+                                         lon as Number, selectedLat as Number?,
+                                         selectedLon as Number?) as Boolean {
+        return sameTile && selectedLat != null && selectedLon != null &&
+            !NearbyStopMaths.movedMoreThan(lat, lon, selectedLat as Number,
+                selectedLon as Number, MOVING_METRES);
+    }
 }

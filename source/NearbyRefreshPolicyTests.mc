@@ -25,6 +25,27 @@ function testNearbyRefreshPolicy(logger as Logger) as Boolean {
         "pending data must be checked before clearing symbol");
     Test.assertMessage(!NearbyRefreshPolicy.shouldUpdateDistances(0, 0, 30, 0, 0, 30, false),
         "unchanged fix does not allocate new distance rows");
+    // A full rebuild within one tile must reset coverage on movement even
+    // when a forced refresh bypasses the normal 30-second rate limit.
+    var lat = -4353100;
+    var lon = 17263700;
+    var movedLat = lat + 10;
+    var tile = NearbyStopMaths.tileId(lat, lon);
+    var movedTile = NearbyStopMaths.tileId(movedLat, lon);
+    Test.assertEqualMessage(tile[0], movedTile[0], "movement remains in same tile");
+    Test.assertEqualMessage(tile[1], movedTile[1], "longitude tile unchanged");
+    Test.assertMessage(!NearbyRefreshPolicy.shouldRefresh(movedLat, lon,
+        lat, lon, 100, 101), "rate limit suppresses automatic rebuild");
+    Test.assertMessage(!NearbyRefreshPolicy.keepDepartureHistory(true, movedLat, lon,
+        lat, lon), "forced movement rebuild resets the key union");
+    Test.assertMessage(NearbyRefreshPolicy.keepDepartureHistory(true, lat, lon,
+        lat, lon), "stationary forced rebuild retains the key union");
+    Test.assertMessage(NearbyRefreshPolicy.keepDepartureHistory(true, lat + 3, lon,
+        lat, lon), "distance-only jitter retains the key union");
+    Test.assertMessage(!NearbyRefreshPolicy.keepDepartureHistory(false, lat, lon,
+        lat, lon), "tile change starts a new session");
+    Test.assertMessage(!NearbyRefreshPolicy.keepDepartureHistory(true, lat, lon,
+        null, null), "first selection has no previous session");
     var rows = [[53092, -4353000, 17263000, "Near"],
                 [53093, -4352900, 17263000, "Other"]] as Array;
     Test.assertEqualMessage(NearbyStopMaths.approxMetres(-4353000, 17263000,

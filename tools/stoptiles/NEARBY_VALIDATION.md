@@ -9,7 +9,7 @@ v2 tiles with extra root keys must both remain readable.
 
 ## Reproduce without credentials
 
-Archive the pinned commit to a new directory under `/tmp/opencode`. Copy
+Archive the pinned commit to a temporary directory. Copy
 `resources/strings/secrets.xml.template` to `secrets.xml` **in that archive
 only**, and create a disposable 4096-bit PKCS#8 DER key there. Never copy the
 maintainer's key or credentials into a scratch tree. Compile all 37 manifest
@@ -25,6 +25,14 @@ Do not take over a simulator process already running. The host test runner may
 exit 1 even after reporting `PASSED (passed=..., failed=0, errors=0)`.
 Simulator CPU, heap, storage and Position behaviour are not physical-device
 evidence.
+
+The cached SIRI departure record contains `ValidUntil` but no fetch timestamp.
+That expiry is not a reliable measure of response age. A dropped stop whose
+departures came from a prior session's cache is currently timed for recheck
+from the moment the cache is read, not from when it was fetched; the strict
+"older than 120 seconds" recheck rule is therefore **not verified**. Resolving
+this requires a separately reviewed fetch-time persistence policy and tests;
+do not infer a fixed TTL from `ValidUntil`.
 
 Use the read-only fixture-server reference in the sibling
 `garmin-christchurch-bus-widget-fakedeps/tools/fakedepartures` directory to

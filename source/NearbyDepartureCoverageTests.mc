@@ -202,5 +202,70 @@ function testNearbySessionKeyOverflowRestoresStops(logger as Logger) as Boolean 
     Test.assertEqualMessage(1,
         (NearbyDepartureCoverage.split(candidate, [moved], 1)[0] as Array).size(),
         "oversized response cannot suppress with previously cached keys");
+    Test.assertMessage(moved[2] == null && moved[7] == true,
+        "oversized response invalidates even previously observed provider keys");
+    var malformed = [2002, 1l, null, true, null, null,
+        {} as Dictionary<String, Boolean>, false] as Array;
+    Test.assertMessage(!NearbyDepartureCoverage.observe(malformed,
+        {"MonitoredStopVisit" => [
+            {"PublishedLineName" => "8", "DestinationName" => 12}
+        ]} as Dictionary), "malformed visit cannot establish a key");
+    Test.assertMessage(malformed[2] == null,
+        "malformed response remains unknown, never an empty covering set");
+    Test.assertEqualMessage(1,
+        (NearbyDepartureCoverage.split(candidate, [malformed], 1)[0] as Array).size(),
+        "malformed provider cannot suppress the matching stop");
+    var onlyOversized = [2003, 1l, null, true, null, null,
+        {} as Dictionary<String, Boolean>, false] as Array;
+    Test.assertMessage(NearbyDepartureCoverage.observe(onlyOversized,
+        {"MonitoredStopVisit" => large} as Dictionary), "oversized fresh provider invalidated");
+    Test.assertEqualMessage(1,
+        (NearbyDepartureCoverage.split(candidate, [onlyOversized], 1)[0] as Array).size(),
+        "33-visit provider cannot suppress without any earlier keys");
+    return true;
+}
+
+(:test, :nearby)
+function testCoverageDroppedRecheckAndPageIdentity(logger as Logger) as Boolean {
+    var shared = NearbyDepartureCoverageTestData.data("8", "City");
+    var unique = NearbyDepartureCoverageTestData.data("9", "Airport");
+    var entries = NearbyDepartureCoverageTestData.prepare(
+        [[1001, 1l, shared, false], [1002, 4l, shared, false],
+         [1003, 9l, unique, false], [1004, 16l, shared, false]] as Array);
+    var split = NearbyDepartureCoverage.split(entries, [] as Array, 2);
+    var selected = split[0] as Array;
+    var dropped = split[1] as Array;
+    Test.assertEqualMessage(2, selected.size(), "two pages fill the limit");
+    Test.assertEqualMessage(1001, (selected[0] as Array)[0], "first page");
+    Test.assertEqualMessage(1003, (selected[1] as Array)[0], "second page");
+    Test.assertEqualMessage(1, dropped.size(), "only examined covered stop");
+    Test.assertEqualMessage(1002, (dropped[0] as Array)[0],
+        "unexamined fourth stop must not enter recheck set");
+    var oldPage = {"stopId" => 1003, "nearby" => true};
+    var pages = [{"stopId" => 1001, "nearby" => true},
+                 {"stopId" => 1003, "nearby" => true}] as Array<Dictionary>;
+    Test.assertEqualMessage(1, NearbyPageOrder.preserve(oldPage, pages, 0),
+        "selected page initially second");
+    Test.assertMessage(!NearbyRecheckPolicy.eligible(false, true, false, 0,
+        false, false, null, 200), "timer/update cannot recheck a dropped stop");
+    Test.assertMessage(NearbyRecheckPolicy.eligible(true, true, false, 0,
+        false, false, 70, 200), "navigation may recheck an eligible dropped stop");
+    Test.assertMessage(!NearbyRecheckPolicy.eligible(true, true, false, 0,
+        false, false, 100, 200), "recently checked dropped stop is not eligible");
+    // Once that dropped stop has new unique departures, its page is inserted
+    // ahead of the selected page. Selection remains tied to the stop code.
+    Test.assertMessage(NearbyDepartureCoverage.observe(entries[1] as Array,
+        NearbyDepartureCoverageTestData.data("10", "Harbour")),
+        "rechecked stop gains a distinct departure");
+    split = NearbyDepartureCoverage.split(entries, [] as Array, 3);
+    selected = split[0] as Array;
+    Test.assertEqualMessage(3, selected.size(), "restored page joins the list");
+    Test.assertEqualMessage(1002, (selected[1] as Array)[0], "restored before selected");
+    pages = [{"stopId" => 1001, "nearby" => true},
+             {"stopId" => 1002, "nearby" => true},
+             {"stopId" => 1003, "nearby" => true}] as Array<Dictionary>;
+    var index = NearbyPageOrder.preserve(oldPage, pages, 0);
+    Test.assertEqualMessage(2, index, "selected index follows its stop");
+    Test.assertEqualMessage(1003, pages[index]["stopId"], "selected stop unchanged");
     return true;
 }
