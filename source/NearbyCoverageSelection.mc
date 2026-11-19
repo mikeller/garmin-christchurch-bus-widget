@@ -55,63 +55,92 @@ class NearbyCoverageSelection {
         }
 
         var nearby = [] as Array;
-        var lastD2 = -1l;
-        var lastCode = -1;
-        // Keys (as char arrays) of every stop already known to provide
-        // coverage: accepted candidates plus favourites nearer than the
-        // candidate currently being tested.
-        var providers = [] as Array;
+        // The union of keys provided by accepted stops and closer favourites.
+        // Never scan every provider's keys again for each candidate.
+        var covered = {} as Dictionary<Number, Boolean>;
         var favouritePtr = 0;
-        // Visit every candidate in (unrounded squared distance, code) order.
-        // At most the loaded tile's validated rows can be examined.
-        for (var scan = 0; scan < rows.size() && nearby.size() < n; scan++) {
-            var best = -1;
-            var bestD2 = 0l;
-            var bestCode = 0;
-            for (var i = 0; i < rows.size(); i++) {
-                var row = rows[i] as Array;
-                var code = row[NearbyStopMaths.STOP_CODE] as Number;
-                if (favouriteSet.hasKey(code)) {
-                    continue;
-                }
-                var d2 = NearbyStopMaths.distanceSquared(row[NearbyStopMaths.STOP_LAT_E5] as Number,
-                    row[NearbyStopMaths.STOP_LON_E5] as Number, lat, lon);
-                if (d2 < lastD2 || (d2 == lastD2 && code <= lastCode)) {
-                    continue;
-                }
-                if (best < 0 || d2 < bestD2 || (d2 == bestD2 && code < bestCode)) {
-                    best = i;
-                    bestD2 = d2;
-                    bestCode = code;
+        // Build a min-heap once rather than measuring every row again for
+        // each covered candidate. A busy tile can reject nearly every row.
+        var heap = [] as Array;
+        for (var i = 0; i < rows.size(); i++) {
+            var row = rows[i] as Array;
+            var code = row[NearbyStopMaths.STOP_CODE] as Number;
+            if (!favouriteSet.hasKey(code)) {
+                heap.add([i, NearbyStopMaths.distanceSquared(
+                    row[NearbyStopMaths.STOP_LAT_E5] as Number,
+                    row[NearbyStopMaths.STOP_LON_E5] as Number, lat, lon), code] as Array);
+                var at = heap.size() - 1;
+                while (at > 0) {
+                    var parent = (at - 1) / 2;
+                    if (!before(heap[at] as Array, heap[parent] as Array)) {
+                        break;
+                    }
+                    var previous = heap[parent];
+                    heap[parent] = heap[at];
+                    heap[at] = previous;
+                    at = parent;
                 }
             }
-            if (best < 0) {
-                break;
+        }
+        var heapCount = heap.size();
+        while (heapCount > 0 && nearby.size() < n) {
+            var candidate = heap[0] as Array;
+            heapCount--;
+            if (heapCount > 0) {
+                heap[0] = heap[heapCount];
+                var at = 0;
+                while (at * 2 + 1 < heapCount) {
+                    var child = at * 2 + 1;
+                    if (child + 1 < heapCount &&
+                        before(heap[child + 1] as Array, heap[child] as Array)) {
+                        child++;
+                    }
+                    if (!before(heap[child] as Array, heap[at] as Array)) {
+                        break;
+                    }
+                    var previous = heap[at];
+                    heap[at] = heap[child];
+                    heap[child] = previous;
+                    at = child;
+                }
             }
-            lastD2 = bestD2;
-            lastCode = bestCode;
+            var best = candidate[0] as Number;
+            var bestD2 = candidate[1] as Long;
+            var bestCode = candidate[2] as Number;
 
             while (favouritePtr < favouriteD2.size() && (favouriteD2[favouritePtr] as Long) < bestD2) {
                 var provider = favouriteKeys[favouritePtr];
                 if (provider != null) {
-                    providers.add((provider as String).toCharArray());
+                    addKeys(covered, provider as String);
                 }
                 favouritePtr++;
             }
 
             var keys = keysFor(contexts, best);
             // Null, partial and empty keys never establish coverage.
-            if (keys != null && whollyCovered(keys as String, providers)) {
+            if (keys != null && whollyCovered(keys as String, covered)) {
                 continue;
             }
             if (keys != null) {
-                providers.add((keys as String).toCharArray());
+                addKeys(covered, keys as String);
             }
             var selected = rows[best] as Array;
             nearby.add([bestCode, selected[NearbyStopMaths.STOP_NAME],
                 NearbyStopMaths.metresFromSquared(bestD2)] as Array);
         }
         return [nearby, legacy[1]] as Array;
+    }
+
+    private static function before(a as Array, b as Array) as Boolean {
+        return (a[1] as Long) < (b[1] as Long) ||
+            (a[1] == b[1] && (a[2] as Number) < (b[2] as Number));
+    }
+
+    private static function addKeys(covered as Dictionary<Number, Boolean>, keys as String) as Void {
+        var digits = keys.toCharArray();
+        for (var i = 0; i < digits.size(); i += 2) {
+            covered[(digits[i] as Char).toNumber() * 128 + (digits[i + 1] as Char).toNumber()] = true;
+        }
     }
 
     // Inserts (d2, keys) kept sorted ascending by d2. At most favourites.size()
@@ -156,33 +185,18 @@ class NearbyCoverageSelection {
         return null;
     }
 
-    // providers are already-resolved char arrays (accepted candidates plus
-    // favourites nearer than this candidate); see select().
-    private static function whollyCovered(keys as String, providers as Array) as Boolean {
+    private static function whollyCovered(keys as String,
+                                           covered as Dictionary<Number, Boolean>) as Boolean {
         // Decode only the candidate once. All comparisons use the validated
         // ascending two-digit base36 encoding, never route-name matching.
         var digits = keys.toCharArray();
         for (var k = 0; k < digits.size(); k += 2) {
-            var covered = false;
-            for (var j = 0; j < providers.size(); j++) {
-                if (hasPair(providers[j] as Array, digits[k] as Char, digits[k + 1] as Char)) {
-                    covered = true;
-                    break;
-                }
-            }
-            if (!covered) {
+            if (!covered.hasKey((digits[k] as Char).toNumber() * 128 +
+                                (digits[k + 1] as Char).toNumber())) {
                 return false;
             }
         }
         return true;
     }
 
-    private static function hasPair(digits as Array, high as Char, low as Char) as Boolean {
-        for (var i = 0; i < digits.size(); i += 2) {
-            if (digits[i] == high && digits[i + 1] == low) {
-                return true;
-            }
-        }
-        return false;
-    }
 }

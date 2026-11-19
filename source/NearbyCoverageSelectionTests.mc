@@ -81,6 +81,30 @@ function testNearbyCoverageBeyondFifteenAndTies(logger as Logger) as Boolean {
 }
 
 (:test, :nearby)
+function testNearbyCoverageBusyTile(logger as Logger) as Boolean {
+    var rows = [] as Array;
+    var keys = [] as Array;
+    var favourites = [] as Array<Number>;
+    // 56 rows, 60 possible keys, 16 favourites, and 18 encoded keys per
+    // stop. Almost every non-favourite is covered, so selection must visit
+    // the entire tile without repeating a full nearest-row search.
+    for (var i = 0; i < 56; i++) {
+        rows.add([1001 + i, 0, i + 1, "S"]);
+        keys.add(i == 55 ? "000102030405060708090a0b0c0d0e0f101112" :
+            "000102030405060708090a0b0c0d0e0f10");
+        if (i >= 2 && i < 18) {
+            favourites.add(1001 + i);
+        }
+    }
+    var ctx = NearbyCoverageTestData.context(rows, keys, []);
+    Test.assertMessage(ctx["i"] != null, "busy metadata usable");
+    Test.assertEqualMessage("[1001, 1056]",
+        NearbyCoverageTestData.codes([ctx], favourites, 5),
+        "covered candidates must not prevent last distinct stop");
+    return true;
+}
+
+(:test, :nearby)
 function testNearbyCoverageFavourites(logger as Logger) as Boolean {
     var rows = [[1001, 0, 1, "F"], [1002, 0, 2, "A"],
                 [1003, 0, 3, "B"], [1004, 0, 4, "C"]];
