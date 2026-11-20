@@ -86,7 +86,9 @@ class BaseChristchurchBusView extends WatchUi.View {
         pairedIndicatorRect = NearbyFixIndicator.rect(dc.getWidth(), dc.getHeight(),
             dc.getHeight() / 6, true, true, true);
         networkIndicatorRect = NearbyFixIndicator.rect(dc.getWidth(), dc.getHeight(),
-            dc.getHeight() / 6, true, false, true);
+            nearbyPage ? dc.getHeight() / 6 :
+                dc.getHeight() / 10 + NearbyFixIndicator.NETWORK_TITLE_SHIFT,
+            true, false, true);
         if (nearbyPage) {
             nearbyStartY = dc.getHeight() / 4;
             var fonts = NearbyPageTitle.effectiveFonts(dc);
@@ -216,7 +218,9 @@ class BaseChristchurchBusView extends WatchUi.View {
         }
         var titleWidth = getTitleWidth(dc);
 
-        cursorY = staleNearbyPosition ? screenHeight / 6 : screenHeight / 10;
+        cursorY = staleNearbyPosition ? screenHeight / 6 :
+            screenHeight / 10 + (dataIsStale ?
+                NearbyFixIndicator.NETWORK_TITLE_SHIFT : 0);
         dc.drawText(titleWidth / 2, cursorY, Graphics.FONT_SYSTEM_SMALL, titleToDraw, Graphics.TEXT_JUSTIFY_CENTER);
         cursorY += dc.getFontHeight(Graphics.FONT_SYSTEM_SMALL) + Constants.VERTICAL_SPACE;
         dc.setPenWidth(Constants.LINE_WIDTH);

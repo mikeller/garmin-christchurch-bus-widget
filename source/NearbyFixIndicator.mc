@@ -8,6 +8,9 @@ class NearbyFixIndicator {
     static const SCALE_DIVISOR as Number = 10;
     static const MIN_DIAMETER as Number = 16;
     static const TITLE_GAP as Number = 2;
+    // A lone 20 px bitmap cannot fit above the old height / 10 favourite
+    // title inside a 240 px round screen without four extra pixels.
+    static const NETWORK_TITLE_SHIFT as Number = 4;
     // This PNG is 20 x 20 px in resources/drawables/connection_problem_icon.png.
     static const NETWORK_SIZE as Number = 20;
     static const NETWORK_GAP as Number = 4;

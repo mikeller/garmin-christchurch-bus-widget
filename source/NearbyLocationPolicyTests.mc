@@ -119,6 +119,20 @@ function testNearbyFixIndicatorPlacement(logger as Logger) as Boolean {
                     profile[0] + " both icons share a vertical centre");
             }
         }
+        var favouriteTitle = height / 10 + NearbyFixIndicator.NETWORK_TITLE_SHIFT;
+        var lone = NearbyFixIndicator.rect(width, height, favouriteTitle,
+            true, false, true) as Array;
+        Test.assertMessage(lone != null, profile[0] + " network-only favourite fits");
+        var bitmapY = lone[4] as Number;
+        var bitmapX = lone[3] as Number;
+        var left = width / 2 - bitmapX;
+        var top = height / 2 - bitmapY;
+        var radius = width / 2 - 5;
+        Test.assertMessage(top * top + left * left <= radius * radius,
+            profile[0] + " network-only favourite inside bezel");
+        Test.assertMessage(bitmapY + NearbyFixIndicator.NETWORK_SIZE +
+            NearbyFixIndicator.TITLE_GAP <= favouriteTitle,
+            profile[0] + " network-only favourite clears title");
     }
     var mk1 = NearbyFixIndicator.rect(240, 240, 40, true, true, true) as Array;
     Test.assertEqualMessage(96, mk1[0], "Mk1 paired GPS left");
@@ -132,6 +146,14 @@ function testNearbyFixIndicatorPlacement(logger as Logger) as Boolean {
     Test.assertEqualMessage(16, rectangle[2], "minimum diameter on a narrow rectangle");
     Test.assertMessage(rectangle[1] + rectangle[2] < 40,
         "rectangular screen title remains unobstructed");
+    var loneNetwork = NearbyFixIndicator.rect(240, 240,
+        240 / 10 + NearbyFixIndicator.NETWORK_TITLE_SHIFT,
+        true, false, true) as Array;
+    Test.assertEqualMessage(6, loneNetwork[4], "network-only favourite clears bezel");
+    Test.assertMessage((loneNetwork[4] as Number) + NearbyFixIndicator.NETWORK_SIZE +
+        NearbyFixIndicator.TITLE_GAP <=
+        240 / 10 + NearbyFixIndicator.NETWORK_TITLE_SHIFT,
+        "network-only favourite icon clears its shifted title");
     Test.assertMessage(NearbyFixIndicator.rect(240, 240, 40, true, false, false) == null,
         "no icon when neither warning applies");
     return true;
