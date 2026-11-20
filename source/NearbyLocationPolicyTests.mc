@@ -1,7 +1,17 @@
 import Toybox.Lang;
-import Toybox.Math;
+import Toybox.Graphics;
 import Toybox.Position;
 import Toybox.Test;
+import Toybox.WatchUi;
+
+(:debug, :nearby)
+function nearbyIndicatorWithinOne(a as Number, b as Number) as Boolean {
+    var difference = a - b;
+    if (difference < 0) {
+        difference = -difference;
+    }
+    return difference <= 1;
+}
 
 (:test, :nearby)
 function testNearbyLocationPolicy(logger as Logger) as Boolean {
@@ -87,7 +97,7 @@ function testNearbyFixIndicatorPlacement(logger as Logger) as Boolean {
                 Test.assertMessage(top * top + side * side <= radius * radius,
                     profile[0] + " GPS top outer corner inside circle");
                 if (!network) {
-                    Test.assertMessage(Math.abs((x * 2 + size - width).toFloat()) <= 1,
+                    Test.assertMessage(nearbyIndicatorWithinOne(x * 2 + size, width),
                         profile[0] + " single GPS icon centred");
                 }
             }
@@ -101,8 +111,8 @@ function testNearbyFixIndicatorPlacement(logger as Logger) as Boolean {
                 Test.assertMessage(top * top + side * side <= radius * radius,
                     profile[0] + " network top outer corner inside circle");
                 if (!gps) {
-                    Test.assertMessage(Math.abs((networkX * 2 +
-                        NearbyFixIndicator.NETWORK_SIZE - width).toFloat()) <= 1,
+                    Test.assertMessage(nearbyIndicatorWithinOne(networkX * 2 +
+                        NearbyFixIndicator.NETWORK_SIZE, width),
                         profile[0] + " single network icon centred");
                 }
             }
@@ -111,11 +121,11 @@ function testNearbyFixIndicatorPlacement(logger as Logger) as Boolean {
                     "declared order puts GPS on left");
                 Test.assertEqualMessage(x + size + NearbyFixIndicator.NETWORK_GAP,
                     networkX, "pair has exactly the declared gap and order");
-                Test.assertMessage(Math.abs((x - (width - networkX -
-                    NearbyFixIndicator.NETWORK_SIZE)).toFloat()) <= 1,
+                Test.assertMessage(nearbyIndicatorWithinOne(x,
+                    width - networkX - NearbyFixIndicator.NETWORK_SIZE),
                     profile[0] + " pair has equal outer margins");
-                Test.assertMessage(Math.abs((y * 2 + size - networkY * 2 -
-                    NearbyFixIndicator.NETWORK_SIZE).toFloat()) <= 1,
+                Test.assertMessage(nearbyIndicatorWithinOne(y * 2 + size,
+                    networkY * 2 + NearbyFixIndicator.NETWORK_SIZE),
                     profile[0] + " both icons share a vertical centre");
             }
         }
@@ -156,5 +166,24 @@ function testNearbyFixIndicatorPlacement(logger as Logger) as Boolean {
         "network-only favourite icon clears its shifted title");
     Test.assertMessage(NearbyFixIndicator.rect(240, 240, 40, true, false, false) == null,
         "no icon when neither warning applies");
+    return true;
+}
+
+// A real Dc on the oldest nearby-capable profile catches SDK symbols that
+// compile but are missing in the simulator, unlike pure layout assertions.
+(:test, :nearby)
+function testNearbyIndicatorDrawingOnDevice(logger as Logger) as Boolean {
+    var bitmap = new Graphics.BufferedBitmap({"width" => 80, "height" => 80});
+    var dc = bitmap.getDc();
+    Test.assertEqualMessage(80, dc.getWidth(), "test drawing width");
+    Test.assertEqualMessage(80, dc.getHeight(), "test drawing height");
+    dc.setColor(Constants.COLOUR_FOREGROUND, Constants.COLOUR_BACKGROUND);
+    dc.clear();
+    var bounds = NearbyFixIndicator.rect(80, 80, 40, false, true, true) as Array<Number>;
+    Test.assertMessage(bounds != null, "both icons fit the test drawing surface");
+    NearbyFixIndicator.draw(dc, bounds);
+    var networkIcon = WatchUi.loadResource(Rez.Drawables.ConnectionProblemIcon)
+        as BitmapReference;
+    dc.drawBitmap(bounds[3], bounds[4], networkIcon);
     return true;
 }
