@@ -173,14 +173,23 @@ function testNearbyFixIndicatorPlacement(logger as Logger) as Boolean {
 // compile but are missing in the simulator, unlike pure layout assertions.
 (:test, :nearby)
 function testNearbyIndicatorDrawingOnDevice(logger as Logger) as Boolean {
-    var bitmap = new Graphics.BufferedBitmap({"width" => 80, "height" => 80});
+    Test.assertMessage(Graphics has :BufferedBitmap,
+        "this profile must provide a drawing surface, not silently skip");
+    var bitmap = new Graphics.BufferedBitmap({:width => 48, :height => 40});
+    Test.assertMessage(bitmap has :getDc, "buffer has drawing context");
     var dc = bitmap.getDc();
-    Test.assertEqualMessage(80, dc.getWidth(), "test drawing width");
-    Test.assertEqualMessage(80, dc.getHeight(), "test drawing height");
+    Test.assertMessage(dc has :fillCircle && dc has :fillRectangle &&
+        dc has :drawLine && dc has :setPenWidth && dc has :setColor &&
+        dc has :drawBitmap, "production Dc primitives must exist at runtime");
+    Test.assertMessage(WatchUi has :loadResource, "network bitmap loader exists");
+    Test.assertEqualMessage(48, dc.getWidth(), "test drawing width");
+    Test.assertEqualMessage(40, dc.getHeight(), "test drawing height");
     dc.setColor(Constants.COLOUR_FOREGROUND, Constants.COLOUR_BACKGROUND);
     dc.clear();
-    var bounds = NearbyFixIndicator.rect(80, 80, 40, false, true, true) as Array<Number>;
+    var bounds = NearbyFixIndicator.rect(48, 40, 32, false, true, true) as Array<Number>;
     Test.assertMessage(bounds != null, "both icons fit the test drawing surface");
+    Test.assertEqualMessage(4, bounds[0], "GPS inside the tiny test surface");
+    Test.assertEqualMessage(24, bounds[3], "network bitmap clear of GPS");
     NearbyFixIndicator.draw(dc, bounds);
     var networkIcon = WatchUi.loadResource(Rez.Drawables.ConnectionProblemIcon)
         as BitmapReference;
