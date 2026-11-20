@@ -1,4 +1,5 @@
 import Toybox.Lang;
+import Toybox.Math;
 import Toybox.Position;
 import Toybox.Test;
 
@@ -42,16 +43,96 @@ function testNearbyLocationPolicy(logger as Logger) as Boolean {
 
 (:test, :nearby)
 function testNearbyFixIndicatorPlacement(logger as Logger) as Boolean {
-    var alone = NearbyFixIndicator.rect(240, 240, false);
-    var besideNetwork = NearbyFixIndicator.rect(240, 240, true);
-    Test.assertEqualMessage(114, (alone as Array)[0], "centred when alone");
-    Test.assertEqualMessage(91, (besideNetwork as Array)[0], "left of network icon");
-    Test.assertEqualMessage(17, (besideNetwork as Array)[1], "top chord with title below");
-    Test.assertMessage((besideNetwork as Array)[0] + 12 < 110,
-        "does not overlap existing 20 px network icon");
-    Test.assertMessage((besideNetwork as Array)[1] + 12 < 40,
-        "clear of wrapped nearby title");
-    Test.assertMessage(NearbyFixIndicator.rect(176, 176, true) == null,
-        "skip indicator if top chord is too narrow");
+    // Every nearby-capable product from manifest.xml, matched to its SDK
+    // simulator.json display. All 24 currently have round screens.
+    var profiles = [
+        ["descentmk1", 240, 240], ["descentmk2", 280, 280],
+        ["descentmk2s", 240, 240], ["descentmk343mm", 390, 390],
+        ["descentmk351mm", 454, 454], ["fenix5plus", 240, 240],
+        ["fenix5splus", 240, 240], ["fenix5x", 240, 240],
+        ["fenix5xplus", 240, 240], ["fenix6pro", 260, 260],
+        ["fenix6spro", 240, 240], ["fenix6xpro", 280, 280],
+        ["fr645m", 240, 240], ["fr745", 240, 240],
+        ["fr945", 240, 240], ["fr945lte", 240, 240],
+        ["marqadventurer", 240, 240], ["marqathlete", 240, 240],
+        ["marqaviator", 240, 240], ["marqcaptain", 240, 240],
+        ["marqcommander", 240, 240], ["marqdriver", 240, 240],
+        ["marqexpedition", 240, 240], ["marqgolfer", 240, 240]
+    ];
+    Test.assertEqualMessage(24, profiles.size(), "all nearby-capable manifest products");
+    for (var i = 0; i < profiles.size(); i++) {
+        var profile = profiles[i] as Array;
+        var width = profile[1] as Number;
+        var height = profile[2] as Number;
+        var titleTop = height / 6;
+        for (var state = 0; state < 3; state++) {
+            var gps = state != 1;
+            var network = state != 0;
+            var bounds = NearbyFixIndicator.rect(width, height, titleTop, true, gps, network);
+            Test.assertMessage(bounds != null, profile[0] + " fits every icon state");
+            var x = (bounds as Array)[0] as Number;
+            var y = (bounds as Array)[1] as Number;
+            var size = (bounds as Array)[2] as Number;
+            var networkX = (bounds as Array)[3] as Number;
+            var networkY = (bounds as Array)[4] as Number;
+            var radius = width / 2 - 5;
+            if (gps) {
+                Test.assertMessage(size >= 16 && size >= width * 9 / 100,
+                    profile[0] + " GPS icon is large enough");
+                Test.assertMessage(y >= 0 &&
+                    y + size + NearbyFixIndicator.TITLE_GAP <= titleTop,
+                    profile[0] + " GPS clear of both title rectangles");
+                var side = width / 2 - x;
+                var top = height / 2 - y;
+                Test.assertMessage(top * top + side * side <= radius * radius,
+                    profile[0] + " GPS top outer corner inside circle");
+                if (!network) {
+                    Test.assertMessage(Math.abs((x * 2 + size - width).toFloat()) <= 1,
+                        profile[0] + " single GPS icon centred");
+                }
+            }
+            if (network) {
+                Test.assertMessage(networkY >= 0 &&
+                    networkY + NearbyFixIndicator.NETWORK_SIZE +
+                        NearbyFixIndicator.TITLE_GAP <= titleTop,
+                    profile[0] + " network clear of both title rectangles");
+                var side = networkX + NearbyFixIndicator.NETWORK_SIZE - width / 2;
+                var top = height / 2 - networkY;
+                Test.assertMessage(top * top + side * side <= radius * radius,
+                    profile[0] + " network top outer corner inside circle");
+                if (!gps) {
+                    Test.assertMessage(Math.abs((networkX * 2 +
+                        NearbyFixIndicator.NETWORK_SIZE - width).toFloat()) <= 1,
+                        profile[0] + " single network icon centred");
+                }
+            }
+            if (gps && network) {
+                Test.assertMessage(NearbyFixIndicator.GPS_FIRST,
+                    "declared order puts GPS on left");
+                Test.assertEqualMessage(x + size + NearbyFixIndicator.NETWORK_GAP,
+                    networkX, "pair has exactly the declared gap and order");
+                Test.assertMessage(Math.abs((x - (width - networkX -
+                    NearbyFixIndicator.NETWORK_SIZE)).toFloat()) <= 1,
+                    profile[0] + " pair has equal outer margins");
+                Test.assertMessage(Math.abs((y * 2 + size - networkY * 2 -
+                    NearbyFixIndicator.NETWORK_SIZE).toFloat()) <= 1,
+                    profile[0] + " both icons share a vertical centre");
+            }
+        }
+    }
+    var mk1 = NearbyFixIndicator.rect(240, 240, 40, true, true, true) as Array;
+    Test.assertEqualMessage(96, mk1[0], "Mk1 paired GPS left");
+    Test.assertEqualMessage(14, mk1[1], "Mk1 paired icon top");
+    Test.assertEqualMessage(24, mk1[2], "Mk1 icon diameter");
+    Test.assertEqualMessage(124, mk1[3], "Mk1 network on right");
+    Test.assertEqualMessage(16, mk1[4], "network bitmap centres at GPS centre");
+    Test.assertMessage(NearbyFixIndicator.rect(176, 176, 176 / 6, true, true, true) == null,
+        "skip paired icons when the top chord is too narrow");
+    var rectangle = NearbyFixIndicator.rect(160, 240, 40, false, true, false) as Array;
+    Test.assertEqualMessage(16, rectangle[2], "minimum diameter on a narrow rectangle");
+    Test.assertMessage(rectangle[1] + rectangle[2] < 40,
+        "rectangular screen title remains unobstructed");
+    Test.assertMessage(NearbyFixIndicator.rect(240, 240, 40, true, false, false) == null,
+        "no icon when neither warning applies");
     return true;
 }

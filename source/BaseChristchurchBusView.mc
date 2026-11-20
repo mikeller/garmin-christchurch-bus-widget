@@ -22,6 +22,9 @@ class BaseChristchurchBusView extends WatchUi.View {
     protected var nearbyFont as Graphics.FontType = Graphics.FONT_SYSTEM_SMALL;
     protected var nearbyLineHeight as Number = 0;
     protected var nearbyStartY as Number = 0;
+    protected var fixIndicatorRect as Array<Number>?;
+    protected var pairedIndicatorRect as Array<Number>?;
+    protected var networkIndicatorRect as Array<Number>?;
 
     protected var cursorY as Number = 0;
 
@@ -76,6 +79,14 @@ class BaseChristchurchBusView extends WatchUi.View {
     }
 
     function onLayout(dc as Dc) as Void {
+        // A stale favourite title starts at height / 6; the nearby title
+        // starts no higher. Reserve no new title or departure-row space.
+        fixIndicatorRect = NearbyFixIndicator.rect(dc.getWidth(), dc.getHeight(),
+            dc.getHeight() / 6, true, true, false);
+        pairedIndicatorRect = NearbyFixIndicator.rect(dc.getWidth(), dc.getHeight(),
+            dc.getHeight() / 6, true, true, true);
+        networkIndicatorRect = NearbyFixIndicator.rect(dc.getWidth(), dc.getHeight(),
+            dc.getHeight() / 6, true, false, true);
         if (nearbyPage) {
             nearbyStartY = dc.getHeight() / 4;
             var fonts = NearbyPageTitle.effectiveFonts(dc);
@@ -181,7 +192,12 @@ class BaseChristchurchBusView extends WatchUi.View {
 
         if (dataIsStale) {
             var connectionProblemIcon = WatchUi.loadResource(Rez.Drawables.ConnectionProblemIcon) as BitmapReference;
-            dc.drawBitmap(screenWidth / 2 - 10, 2 * Constants.VERTICAL_SPACE, connectionProblemIcon);
+            var networkBounds = staleNearbyPosition ?
+                pairedIndicatorRect : networkIndicatorRect;
+            if (networkBounds != null) {
+                dc.drawBitmap((networkBounds as Array<Number>)[3],
+                    (networkBounds as Array<Number>)[4], connectionProblemIcon);
+            }
         }
         drawNearbyFixIndicator(dc);
 
@@ -214,27 +230,12 @@ class BaseChristchurchBusView extends WatchUi.View {
 
     (:nearby)
     protected function drawNearbyFixIndicator(dc as Dc) as Void {
-        if (!staleNearbyPosition) {
-            return;
+        if (staleNearbyPosition) {
+            var bounds = dataIsStale ? pairedIndicatorRect : fixIndicatorRect;
+            if (bounds != null) {
+                NearbyFixIndicator.draw(dc, bounds as Array<Number>);
+            }
         }
-        var rect = NearbyFixIndicator.rect(dc.getWidth(), dc.getHeight(), dataIsStale);
-        if (rect == null) {
-            return;
-        }
-        var x = rect[0];
-        var y = rect[1];
-        dc.setColor(Graphics.COLOR_RED, Constants.COLOUR_BACKGROUND);
-        dc.setPenWidth(1);
-        // Rotated body (diamond), two panels and an exclamation mark.
-        dc.drawLine(x + 6, y + 2, x + 9, y + 5);
-        dc.drawLine(x + 9, y + 5, x + 6, y + 8);
-        dc.drawLine(x + 6, y + 8, x + 3, y + 5);
-        dc.drawLine(x + 3, y + 5, x + 6, y + 2);
-        dc.fillRectangle(x, y + 3, 2, 4);
-        dc.fillRectangle(x + 10, y + 3, 2, 4);
-        dc.drawLine(x + 6, y + 9, x + 6, y + 10);
-        dc.drawPoint(x + 6, y + 11);
-        dc.setColor(Constants.COLOUR_FOREGROUND, Constants.COLOUR_BACKGROUND);
     }
 
     (:noNearby)

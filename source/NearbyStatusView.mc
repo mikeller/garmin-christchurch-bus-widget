@@ -27,6 +27,7 @@ class NearbyStatusView extends BaseChristchurchBusView {
     }
 
     function onLayout(dc as Dc) as Void {
+        BaseChristchurchBusView.onLayout(dc);
         if (dc.getWidth() == layoutWidth && dc.getHeight() == layoutHeight) {
             return;
         }
