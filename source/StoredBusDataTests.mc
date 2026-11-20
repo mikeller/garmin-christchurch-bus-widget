@@ -9,8 +9,8 @@ function testStoredBusDataUpgradeValidation(logger as Logger) as Boolean {
     Test.assertMessage(StoredBusData.validStop(favourites[1]), "blank favourite name");
     Test.assertMessage(!StoredBusData.validStop({"stopId" => "52927", "displayName" => "Stop"}),
         "reject string id");
-    Test.assertMessage(!StoredBusData.validStop({"stopId" => 52927, "displayName" => null}),
-        "reject missing name");
+    Test.assertMessage(StoredBusData.validStop({"stopId" => 52927, "displayName" => null}),
+        "optional name is valid");
     Test.assertMessage(!StoredBusData.validStop(null), "reject missing stop");
     Test.assertMessage(StoredBusData.validLastStop({"stopIndex" => 1}, favourites),
         "published legacy index");

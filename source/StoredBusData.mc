@@ -19,14 +19,58 @@ class StoredBusData {
         return value instanceof Long ? (value as Long).toNumber() : value as Number;
     }
 
-    static function validStop(value as Object?) as Boolean {
+    // Properties may return a Long for an integer, and an optional name may
+    // be absent. Never mutate a persisted setting while validating it.
+    static function normaliseStop(value as Object?) as Dictionary? {
         if (!(value instanceof Dictionary)) {
-            return false;
+            return null;
         }
         var stop = value as Dictionary;
-        return stop["stopId"] instanceof Number &&
-            (stop["stopId"] as Number) >= 1000 && (stop["stopId"] as Number) <= 99999 &&
-            stop["displayName"] instanceof String;
+        var rawId = stop["stopId"];
+        if (rawId instanceof Long) {
+            if ((rawId as Long) < 1000l || (rawId as Long) > 99999l) {
+                return null;
+            }
+        } else if (!(rawId instanceof Number) ||
+                   (rawId as Number) < 1000 || (rawId as Number) > 99999) {
+            return null;
+        }
+        var id = toStoredNumber(rawId as Object);
+        var rawName = stop["displayName"];
+        var name = rawName instanceof String ? rawName as String : "";
+        var blank = true;
+        for (var i = 0; i < name.length(); i++) {
+            if (" \t\r\n".find(name.substring(i, i + 1)) == null) {
+                blank = false;
+                break;
+            }
+        }
+        if (blank) {
+            name = "";
+        } else if (name.length() > 32) {
+            name = name.substring(0, 32) as String;
+        }
+        return {"stopId" => id, "displayName" => name};
+    }
+
+    static function validStop(value as Object?) as Boolean {
+        return normaliseStop(value) != null;
+    }
+
+    // Keep only the first sixteen usable favourites in memory. Duplicate
+    // IDs are deliberately left to the existing getStopsProperty() path.
+    static function normaliseStops(value as Object?) as Array<Dictionary> {
+        var clean = [] as Array<Dictionary>;
+        if (value instanceof Array) {
+            var entries = value as Array;
+            for (var i = 0; i < entries.size() && clean.size() < 16; i++) {
+                var stop = normaliseStop(entries[i]);
+                if (stop != null) {
+                    clean.add(stop as Dictionary);
+                }
+            }
+        }
+        return clean;
     }
 
     static function validLastStop(value as Object?, favourites as Array<Dictionary>) as Boolean {

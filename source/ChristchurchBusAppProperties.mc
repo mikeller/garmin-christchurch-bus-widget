@@ -6,40 +6,31 @@ import Toybox.Application.Properties;
 (:glance)
 class ChristchurchBusAppProperties {
     private static var stops as Array<Dictionary>?;
+    private static var canWriteStops as Boolean = true;
 
     static function loadStops() as Array<Dictionary> {
         if (stops == null) {
             var stored = Properties.getValue("stops");
-            var clean = [] as Array<Dictionary>;
-            if (stored instanceof Array) {
-                var list = stored as Array;
-                for (var i = 0; i < list.size(); i++) {
-                    if (StoredBusData.validStop(list[i])) {
-                        clean.add(list[i] as Dictionary);
-                    }
-                }
-            }
-            stops = clean;
-            // Repair invalid persisted entries once, so relaunching the
-            // widget cannot repeat the same crash.
-            if (stored != null && (!(stored instanceof Array) ||
-                (stored as Array).size() != clean.size())) {
-                try {
-                    Properties.setValue("stops", clean as Array<PropertyValueType>);
-                } catch (e) {
-                    // The validated in-memory list is still safe this session.
-                }
-            }
+            stops = StoredBusData.normaliseStops(stored);
+            // No later duplicate/name write may persist a filtered array.
+            canWriteStops = stored instanceof Array &&
+                (stored as Array).size() == (stops as Array).size();
         }
 
         return stops != null ? stops : [];
     }
 
     static function saveStops(localStops as Array<Dictionary>, needsUpdate as Boolean) as Void {
-        if (needsUpdate) {
+        if (needsUpdate && canWriteStops && localStops.size() > 0) {
             stops = localStops;
             Properties.setValue("stops", stops as Array<PropertyValueType>);
         }
+    }
+
+    (:debug)
+    static function resetStopsForTest() as Void {
+        stops = null;
+        canWriteStops = true;
     }
 
     static function getStopsProperty() as Array<Dictionary>? {
@@ -85,7 +76,8 @@ class ChristchurchBusAppProperties {
             var currentStopName = stop["displayName"] as String;
 
             if (currentStopId == stopId && "".equals(currentStopName)) {
-                stop["displayName"] = stopName;
+                stop["displayName"] = stopName.length() > 32 ?
+                    stopName.substring(0, 32) : stopName;
                 localStops[i] = stop;
                 needsUpdate = true;
             }
