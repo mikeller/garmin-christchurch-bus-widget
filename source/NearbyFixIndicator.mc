@@ -3,10 +3,9 @@ import Toybox.Graphics;
 
 (:nearby)
 class NearbyFixIndicator {
-    static const DISC_COLOUR as Number = Graphics.COLOR_YELLOW;
-    static const GLYPH_COLOUR as Number = Graphics.COLOR_BLACK;
-    static const SCALE_DIVISOR as Number = 10;
-    static const MIN_DIAMETER as Number = 16;
+    static const GLYPH_COLOUR as Number = Graphics.COLOR_WHITE;
+    static const SCALE_DIVISOR as Number = 9;
+    static const MIN_DIAMETER as Number = 20;
     static const TITLE_GAP as Number = 2;
     // A lone 20 px bitmap cannot fit above the old height / 10 favourite
     // title inside a 240 px round screen without four extra pixels.
@@ -18,7 +17,7 @@ class NearbyFixIndicator {
 
     // Pure layout: [GPS left, GPS top, diameter, network left, network top].
     // Unused icon coordinates are -1. Centre each single icon or the whole
-    // pair; both bitmap and disc share one vertical centre line.
+    // pair; both icons share one vertical centre line.
     static function rect(width as Number, height as Number,
                          titleTop as Number, round as Boolean,
                          gpsIcon as Boolean, networkIcon as Boolean) as Array<Number>? {
@@ -86,14 +85,11 @@ class NearbyFixIndicator {
         var size = bounds[2];
         var centreX = x + size / 2;
         var centreY = y + size / 2;
-        var unit = size / 12;
-        var radius = size / 2;
+        var unit = size / 10;
 
-        dc.setColor(DISC_COLOUR, Constants.COLOUR_BACKGROUND);
-        dc.fillCircle(centreX, centreY, radius);
         dc.setColor(GLYPH_COLOUR, Constants.COLOUR_BACKGROUND);
         dc.setPenWidth(unit);
-        // Square solar panels, diamond body and a two-stroke signal fan.
+        // Standalone high-contrast panels, body and signal fan.
         dc.fillRectangle(centreX - 5 * unit, centreY - unit, 2 * unit, 2 * unit);
         dc.fillRectangle(centreX + 3 * unit, centreY - unit, 2 * unit, 2 * unit);
         dc.drawLine(centreX, centreY - 2 * unit, centreX + 2 * unit, centreY);

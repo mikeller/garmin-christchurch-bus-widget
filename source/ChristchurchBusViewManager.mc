@@ -63,6 +63,7 @@ class ChristchurchBusViewManager {
     private var refreshTimer as Timer.Timer = new Timer.Timer();
     private var delayedRefreshRequested as Boolean = false;
     private var displayRevision as Number = 0;
+    private var navigationPending as Boolean = false;
     (:nearby) private var titleStopId as Number?;
     (:nearby) private var titleRows as Array?;
     (:debug, :nearby) private var benchRetain as Boolean = false;
@@ -142,7 +143,7 @@ class ChristchurchBusViewManager {
         }
         savedStopId = ChristchurchBusDataCache.getLastFavouriteForWidget(favourites);
         reader = new ChristchurchBusDataReader();
-        behaviourDelegate = new ChristchurchBusBehaviorDelegate(method(:manualRefresh), method(:nextStop));
+        behaviourDelegate = new ChristchurchBusBehaviorDelegate(method(:navigationQueued), method(:nextStop));
         currentView = new BaseChristchurchBusView(currentPageTitle, false, null, null);
         if (ChristchurchBusAppProperties.nearbyEnabled()) {
             setNearbyStatus(WatchUi.loadResource(Rez.Strings.Locating) as String);
@@ -189,6 +190,7 @@ class ChristchurchBusViewManager {
         // Page switches replace currentView before the previous page hides.
         // Only hiding the current page means that the widget left the screen.
         if (view == currentView && nearbyLocation != null) {
+            traceLifecycle("hide");
             (nearbyLocation as NearbyLocation).stop();
         }
     }
@@ -196,6 +198,7 @@ class ChristchurchBusViewManager {
     function viewShown(view as WatchUi.View) as Void {
         if (view == currentView && nearbyLocation != null &&
             (nearbyLocation as NearbyLocation).getState() == NearbyLocation.IDLE) {
+            traceLifecycle("show");
             (nearbyLocation as NearbyLocation).start(method(:onNearbyLocation));
         }
     }
@@ -251,7 +254,6 @@ class ChristchurchBusViewManager {
             return;
         }
         var oldIndex = currentStopIndex;
-        var previousPage = pages[oldIndex];
         currentStopIndex = nextPageIndex(currentStopIndex, pages.size());
         if (retainedNearby != null && pages[oldIndex]["stopId"] == retainedNearby) {
             var nextPage = pages[currentStopIndex];
@@ -260,8 +262,14 @@ class ChristchurchBusViewManager {
             retainedNearby = null;
         }
         logSelectDecision(oldIndex, currentStopIndex, pages.size());
-        ChristchurchBusDataCache.rememberFavouritePage(pages[currentStopIndex], favourites);
-        recheckAfterSelect(previousPage, pages[currentStopIndex]);
+        // Avoid Storage reads, network callbacks and view construction inside
+        // the input callback. Coalesce rapid Select presses on the existing
+        // refresh timer; do not start another timer on older watches.
+        navigationPending = true;
+        refreshTimer.stop();
+        delayedRefreshRequested = false;
+        refreshTimer.start(method(:onDelayedRefresh), 100, false);
+        delayedRefreshRequested = true;
     }
 
     (:nearby)
@@ -355,6 +363,7 @@ class ChristchurchBusViewManager {
     private function logPageDecision() as Void {}
 
     function manualRefresh() as Void {
+        navigationPending = false;
         traceWorkStart();
         var before = displayRevision;
         refreshNearby(true);
@@ -365,6 +374,18 @@ class ChristchurchBusViewManager {
         }
         traceWorkEnd();
     }
+
+    // The Select delegate shares its interface with the noNearby manager,
+    // which still displays synchronously. Nearby navigation is timer-driven.
+    private function navigationQueued() as Void {}
+
+    (:debug)
+    private function traceLifecycle(event as String) as Void {
+        System.println("Nearby lifecycle: " + event + " ms=" + System.getTimer());
+    }
+
+    (:release)
+    private function traceLifecycle(event as String) as Void {}
 
     (:nearby)
     private function traceWorkStart() as Void { NearbyWorkBudget.begin(); }
@@ -1229,6 +1250,18 @@ class ChristchurchBusViewManager {
 
     function onDelayedRefresh() as Void {
         delayedRefreshRequested = false;
+        traceLifecycle("refresh");
+        if (navigationPending) {
+            navigationPending = false;
+            if (pages.size() > 0) {
+                ChristchurchBusDataCache.rememberFavouritePage(
+                    pages[currentStopIndex], favourites);
+                displayBusesForCurrentStop();
+                recheckAfterSelect(pages[currentStopIndex], pages[currentStopIndex]);
+            }
+            requestDelayedRefresh();
+            return;
+        }
         if (pages.size() > 0) {
             var id = pages[currentStopIndex]["stopId"] as Number?;
             if (id != null && reader.isRunning(id as Number)) {

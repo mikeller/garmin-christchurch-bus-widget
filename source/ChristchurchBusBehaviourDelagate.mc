@@ -13,9 +13,8 @@ class ChristchurchBusBehaviorDelegate extends WatchUi.BehaviorDelegate {
 
     function onSelect() {
         nextStop.invoke();
-
         displayBusesForCurrentStop.invoke();
-
-        return false;
+        // Select is handled here; do not pass it back to the widget stack.
+        return true;
     }
 }

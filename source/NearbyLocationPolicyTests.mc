@@ -145,15 +145,15 @@ function testNearbyFixIndicatorPlacement(logger as Logger) as Boolean {
             profile[0] + " network-only favourite clears title");
     }
     var mk1 = NearbyFixIndicator.rect(240, 240, 40, true, true, true) as Array;
-    Test.assertEqualMessage(96, mk1[0], "Mk1 paired GPS left");
-    Test.assertEqualMessage(14, mk1[1], "Mk1 paired icon top");
-    Test.assertEqualMessage(24, mk1[2], "Mk1 icon diameter");
-    Test.assertEqualMessage(124, mk1[3], "Mk1 network on right");
-    Test.assertEqualMessage(16, mk1[4], "network bitmap centres at GPS centre");
+    Test.assertEqualMessage(95, mk1[0], "Mk1 paired GPS left");
+    Test.assertEqualMessage(12, mk1[1], "Mk1 paired icon top");
+    Test.assertEqualMessage(26, mk1[2], "Mk1 icon diameter");
+    Test.assertEqualMessage(125, mk1[3], "Mk1 network on right");
+    Test.assertEqualMessage(15, mk1[4], "network bitmap centres at GPS centre");
     Test.assertMessage(NearbyFixIndicator.rect(176, 176, 176 / 6, true, true, true) == null,
         "skip paired icons when the top chord is too narrow");
     var rectangle = NearbyFixIndicator.rect(160, 240, 40, false, true, false) as Array;
-    Test.assertEqualMessage(16, rectangle[2], "minimum diameter on a narrow rectangle");
+    Test.assertEqualMessage(20, rectangle[2], "minimum diameter on a narrow rectangle");
     Test.assertMessage(rectangle[1] + rectangle[2] < 40,
         "rectangular screen title remains unobstructed");
     var loneNetwork = NearbyFixIndicator.rect(240, 240,
@@ -188,8 +188,8 @@ function testNearbyIndicatorDrawingOnDevice(logger as Logger) as Boolean {
     dc.clear();
     var bounds = NearbyFixIndicator.rect(48, 40, 32, false, true, true) as Array<Number>;
     Test.assertMessage(bounds != null, "both icons fit the test drawing surface");
-    Test.assertEqualMessage(4, bounds[0], "GPS inside the tiny test surface");
-    Test.assertEqualMessage(24, bounds[3], "network bitmap clear of GPS");
+    Test.assertEqualMessage(2, bounds[0], "GPS inside the tiny test surface");
+    Test.assertEqualMessage(26, bounds[3], "network bitmap clear of GPS");
     NearbyFixIndicator.draw(dc, bounds);
     var networkIcon = WatchUi.loadResource(Rez.Drawables.ConnectionProblemIcon)
         as BitmapReference;

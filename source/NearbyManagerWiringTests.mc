@@ -43,6 +43,9 @@ function testNearbyManagerResponseAndRecheckWiring(logger as Logger) as Boolean 
     manager.nextStop();
     Test.assertEqualMessage(1002, manager.benchSelectedStop(),
         "navigation enters nearby list");
+    Test.assertEqualMessage(0, reader.recheckCount,
+        "Select must not issue a request synchronously");
+    manager.onDelayedRefresh();
     Test.assertEqualMessage(1001, reader.lastRecheck,
         "only coverage-dropped stop gets rechecked on entry");
     Test.assertEqualMessage(1, reader.recheckCount, "one recheck in flight");
