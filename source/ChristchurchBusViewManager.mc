@@ -377,7 +377,9 @@ class ChristchurchBusViewManager {
 
     // The Select delegate shares its interface with the noNearby manager,
     // which still displays synchronously. Nearby navigation is timer-driven.
-    private function navigationQueued() as Void {}
+    // This callback is passed by symbol to the BehaviourDelegate. It cannot
+    // be private because method(:navigationQueued) performs an indirect lookup.
+    function navigationQueued() as Void {}
 
     (:debug)
     private function traceLifecycle(event as String) as Void {
