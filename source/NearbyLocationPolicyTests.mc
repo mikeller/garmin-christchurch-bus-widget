@@ -53,6 +53,10 @@ function testNearbyLocationPolicy(logger as Logger) as Boolean {
 
 (:test, :nearby)
 function testNearbyFixIndicatorPlacement(logger as Logger) as Boolean {
+    Test.assertEqualMessage(Graphics.COLOR_YELLOW, NearbyFixIndicator.PIN_COLOUR,
+        "GPS pin outline uses the daylight warning colour");
+    Test.assertEqualMessage(Graphics.COLOR_BLACK, NearbyFixIndicator.SLASH_COLOUR,
+        "GPS pin unavailable slash remains black");
     // Every nearby-capable product from manifest.xml, matched to its SDK
     // simulator.json display. All 24 currently have round screens.
     var profiles = [

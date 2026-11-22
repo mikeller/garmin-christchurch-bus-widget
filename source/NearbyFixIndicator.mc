@@ -3,7 +3,8 @@ import Toybox.Graphics;
 
 (:nearby)
 class NearbyFixIndicator {
-    static const GLYPH_COLOUR as Number = Graphics.COLOR_WHITE;
+    static const PIN_COLOUR as Number = Graphics.COLOR_YELLOW;
+    static const SLASH_COLOUR as Number = Graphics.COLOR_BLACK;
     static const SCALE_DIVISOR as Number = 9;
     static const MIN_DIAMETER as Number = 20;
     static const TITLE_GAP as Number = 2;
@@ -87,15 +88,17 @@ class NearbyFixIndicator {
         var centreY = y + size / 2;
         var unit = size / 10;
 
-        dc.setColor(GLYPH_COLOUR, Constants.COLOUR_BACKGROUND);
+        // Yellow matches the warning state and remains visible in daylight.
+        dc.setColor(PIN_COLOUR, Constants.COLOUR_BACKGROUND);
         dc.setPenWidth(unit);
-        // A simple location pin fills the same 80% square as the network
+        // A simple location pin fits within the same 80% square as the network
         // bitmap. The circular head and tapered point stay legible at 20 px.
         var headY = centreY - 2 * unit;
         dc.drawCircle(centreX, headY, 2 * unit);
         dc.drawLine(centreX - 2 * unit, headY, centreX, centreY + 4 * unit);
         dc.drawLine(centreX + 2 * unit, headY, centreX, centreY + 4 * unit);
         // A bold slash means the location is unavailable or not current.
+        dc.setColor(SLASH_COLOUR, Constants.COLOUR_BACKGROUND);
         dc.setPenWidth(unit + 1);
         dc.drawLine(centreX - 4 * unit, centreY + 4 * unit,
             centreX + 4 * unit, centreY - 4 * unit);
