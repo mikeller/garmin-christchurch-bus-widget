@@ -178,8 +178,8 @@ function testNearbyIndicatorDrawingOnDevice(logger as Logger) as Boolean {
     var bitmap = new Graphics.BufferedBitmap({:width => 48, :height => 40});
     Test.assertMessage(bitmap has :getDc, "buffer has drawing context");
     var dc = bitmap.getDc();
-    Test.assertMessage(dc has :fillCircle && dc has :fillRectangle &&
-        dc has :drawLine && dc has :setPenWidth && dc has :setColor &&
+    Test.assertMessage(dc has :drawCircle && dc has :drawLine &&
+        dc has :setPenWidth && dc has :setColor &&
         dc has :drawBitmap, "production Dc primitives must exist at runtime");
     Test.assertMessage(WatchUi has :loadResource, "network bitmap loader exists");
     Test.assertEqualMessage(48, dc.getWidth(), "test drawing width");

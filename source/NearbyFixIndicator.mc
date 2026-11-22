@@ -89,18 +89,13 @@ class NearbyFixIndicator {
 
         dc.setColor(GLYPH_COLOUR, Constants.COLOUR_BACKGROUND);
         dc.setPenWidth(unit);
-        // Standalone high-contrast panels, body and signal fan.
-        dc.fillRectangle(centreX - 5 * unit, centreY - unit, 2 * unit, 2 * unit);
-        dc.fillRectangle(centreX + 3 * unit, centreY - unit, 2 * unit, 2 * unit);
-        dc.drawLine(centreX, centreY - 2 * unit, centreX + 2 * unit, centreY);
-        dc.drawLine(centreX + 2 * unit, centreY, centreX, centreY + 2 * unit);
-        dc.drawLine(centreX, centreY + 2 * unit, centreX - 2 * unit, centreY);
-        dc.drawLine(centreX - 2 * unit, centreY, centreX, centreY - 2 * unit);
-        dc.drawLine(centreX + unit, centreY - 3 * unit,
-            centreX + 3 * unit, centreY - 5 * unit);
-        dc.drawLine(centreX + 3 * unit, centreY - 5 * unit,
-            centreX + 5 * unit, centreY - 3 * unit);
-        // A bold slash means the signal is unavailable or not current.
+        // A simple location pin fills the same 80% square as the network
+        // bitmap. The circular head and tapered point stay legible at 20 px.
+        var headY = centreY - 2 * unit;
+        dc.drawCircle(centreX, headY, 2 * unit);
+        dc.drawLine(centreX - 2 * unit, headY, centreX, centreY + 4 * unit);
+        dc.drawLine(centreX + 2 * unit, headY, centreX, centreY + 4 * unit);
+        // A bold slash means the location is unavailable or not current.
         dc.setPenWidth(unit + 1);
         dc.drawLine(centreX - 4 * unit, centreY + 4 * unit,
             centreX + 4 * unit, centreY - 4 * unit);
