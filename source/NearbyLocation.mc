@@ -233,12 +233,12 @@ class NearbyLocation {
         }
         if (acquiring) {
             acquisitionState = NearbyAcquisitionState.timedOut(acquisitionState);
-            if (state != FIX) {
-                state = NO_FIX;
-                failureReason = NearbyUnavailableReason.NO_FIX;
-                notify();
-            }
-            // Keep the one-shot listener registered until a fix or hide/stop.
+            // LOCATION_ONE_SHOT remains registered until it is explicitly
+            // disabled. Do not leave it active after this bounded attempt:
+            // an outstanding Position listener can keep a widget alive past
+            // the platform-managed timeout.
+            failureReason = NearbyUnavailableReason.NO_FIX;
+            finish(false);
         }
     }
 

@@ -6,12 +6,8 @@ function testNearbyAcquisitionLifecycle(logger as Logger) as Boolean {
     var waiting = NearbyAcquisitionState.shown();
     Test.assertMessage(NearbyAcquisitionState.registered(waiting), "shown registers");
     var late = NearbyAcquisitionState.timedOut(waiting);
-    Test.assertEqualMessage(NearbyAcquisitionState.LATE, late, "60s changes label");
-    Test.assertMessage(NearbyAcquisitionState.registered(late), "still listening");
-    Test.assertEqualMessage(NearbyAcquisitionState.FIX,
-        NearbyAcquisitionState.received(late), "late fix delivered");
-    Test.assertMessage(!NearbyAcquisitionState.registered(
-        NearbyAcquisitionState.received(late)), "one-shot disabled");
+    Test.assertEqualMessage(NearbyAcquisitionState.IDLE, late, "60s ends acquisition");
+    Test.assertMessage(!NearbyAcquisitionState.registered(late), "timeout disables listener");
     var suspended = NearbyAcquisitionState.afterHide(late);
     Test.assertMessage(!NearbyAcquisitionState.registered(suspended), "hide disables");
     Test.assertMessage(NearbyAcquisitionState.registered(

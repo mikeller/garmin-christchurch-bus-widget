@@ -4,7 +4,7 @@ import Toybox.Graphics;
 (:nearby)
 class NearbyFixIndicator {
     static const PIN_COLOUR as Number = Graphics.COLOR_YELLOW;
-    static const SLASH_COLOUR as Number = Graphics.COLOR_BLACK;
+    static const SLASH_COLOUR as Number = PIN_COLOUR;
     static const SCALE_DIVISOR as Number = 9;
     static const MIN_DIAMETER as Number = 20;
     static const TITLE_GAP as Number = 2;
@@ -97,7 +97,8 @@ class NearbyFixIndicator {
         dc.drawCircle(centreX, headY, 2 * unit);
         dc.drawLine(centreX - 2 * unit, headY, centreX, centreY + 4 * unit);
         dc.drawLine(centreX + 2 * unit, headY, centreX, centreY + 4 * unit);
-        // A bold slash means the location is unavailable or not current.
+        // Draw the unavailable slash in the same high-contrast warning colour
+        // so it remains recognisable in daylight.
         dc.setColor(SLASH_COLOUR, Constants.COLOUR_BACKGROUND);
         dc.setPenWidth(unit + 1);
         dc.drawLine(centreX - 4 * unit, centreY + 4 * unit,

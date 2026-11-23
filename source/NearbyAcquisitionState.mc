@@ -12,7 +12,7 @@ class NearbyAcquisitionState {
     }
 
     static function timedOut(state as Number) as Number {
-        return state == WAITING ? LATE : state;
+        return IDLE;
     }
 
     static function received(state as Number) as Number {
