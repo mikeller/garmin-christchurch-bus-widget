@@ -2,6 +2,21 @@ import Toybox.Lang;
 import Toybox.Application.Properties;
 import Toybox.Test;
 
+(:test, :nearby)
+class NearbySelectProbe {
+    var selected as Number = 0;
+    function nextStop() as Void { selected++; }
+}
+
+(:test, :nearby)
+function testNearbySelectNeedsNoSecondCallback(logger as Logger) as Boolean {
+    var probe = new NearbySelectProbe();
+    var delegate = new ChristchurchBusBehaviorDelegate(null, probe.method(:nextStop));
+    Test.assertMessage(delegate.onSelect(), "Select is handled");
+    Test.assertEqualMessage(1, probe.selected, "queued navigation needs no extra callback");
+    return true;
+}
+
 // Exercise the manager's real response, page-preservation and navigation
 // callbacks with a fake reader; neither HTTP nor a timer tick is required.
 (:test, :nearby)
@@ -20,7 +35,6 @@ function testNearbyManagerResponseAndRecheckWiring(logger as Logger) as Boolean 
                 [1003, -4349994, 17260000, "C"]] as Array;
     var tile = {"v" => 1, "g" => "2026-11-20", "s" => rows} as Dictionary;
     manager.onTile(ChristchurchBusTileReader.READY, tile, false);
-    manager.benchEnableRetention();
     Test.assertEqualMessage(1000, manager.benchSelectedStop(),
         "favourite selected before nearby list");
     Test.assertEqualMessage(2, manager.benchNearbyCount(), "two nearby pages");
@@ -62,7 +76,7 @@ function testNearbyManagerResponseAndRecheckWiring(logger as Logger) as Boolean 
     Test.assertMessage(!manager.benchIsDropped(1001),
         "new response restores previously covered candidate");
     Test.assertEqualMessage(1003, manager.benchSelectedStop(),
-        "restoration keeps the viewed nearby page, even when retained");
+        "restoration keeps the viewed nearby page");
     Test.assertEqualMessage(2,
         ((manager.benchCandidateState(1001) as Array)[2] as Array).size(),
         "responses accumulate keys once, rather than replaying cache visits");
@@ -85,6 +99,39 @@ function testNearbyManagerResponseAndRecheckWiring(logger as Logger) as Boolean 
         "oversized response makes this stop's session coverage unknown");
     Test.assertMessage(!manager.benchIsDropped(1001),
         "unknown oversized response cannot drop the stop");
+    manager.stop();
+    return true;
+}
+
+(:test, :nearby)
+function testChangedNearbyListStartsAtFirstPage(logger as Logger) as Boolean {
+    Properties.setValue("nearbyEnabled", false);
+    var manager = new ChristchurchBusViewManager([] as Array<Dictionary>);
+    Properties.setValue("nearbyEnabled", true);
+    Properties.setValue("nearbyStopsToShow", 1);
+    Properties.setValue("favouritesBeforeNearby", 16);
+    var location = new NearbyBudgetLocation();
+    manager.benchSetup([{"stopId" => 1000, "displayName" => "First"},
+                        {"stopId" => 1001, "displayName" => "Last"}] as Array<Dictionary>,
+        location);
+    manager.onTile(ChristchurchBusTileReader.READY,
+        {"v" => 1, "g" => "2026-11-20",
+         "s" => [[1000, -4350000, 17260000, "First"],
+                 [1001, -4350000, 17260001, "Last"],
+                 [1002, -4350000, 17260002, "Near"]]} as Dictionary, false);
+    manager.nextStop();
+    manager.nextStop();
+    Test.assertEqualMessage(1002, manager.benchSelectedStop(), "selected nearby page");
+    manager.onTile(ChristchurchBusTileReader.READY,
+        {"v" => 1, "g" => "2026-11-20",
+         "s" => [[1000, -4350000, 17260000, "First"],
+                 [1001, -4350000, 17260001, "Last"],
+                 [1003, -4350000, 17260002, "Replacement"]]} as Dictionary, false);
+    Test.assertEqualMessage(1000, manager.benchSelectedStop(),
+        "missing nearby page restarts at first favourite, not last before Nearby");
+    manager.nextStop();
+    Test.assertEqualMessage(1001, manager.benchSelectedStop(),
+        "Select continues forward from first page");
     manager.stop();
     return true;
 }

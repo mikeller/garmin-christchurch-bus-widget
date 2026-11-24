@@ -65,7 +65,9 @@ class NearbyPageOrder {
                     }
                 }
             } else if ((oldPage as Dictionary)["nearby"] == true) {
-                return -1; // Caller retains this page until the next Select.
+                // The selected nearby stop has left the live list. Start at
+                // the first page, not the favourite just before Nearby.
+                return 0;
             }
         }
         return fallback >= 0 && fallback < newPages.size() ? fallback : 0;

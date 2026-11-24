@@ -1,10 +1,10 @@
 import Toybox.WatchUi;
 
 class ChristchurchBusBehaviorDelegate extends WatchUi.BehaviorDelegate {
-    protected var displayBusesForCurrentStop as Method() as Void;
+    protected var displayBusesForCurrentStop as Method() as Void or Null;
     protected var nextStop as Method() as Void;
 
-    function initialize(displayBusesForCurrentStop as Method() as Void, nextStop as Method() as Void) {
+    function initialize(displayBusesForCurrentStop as Method() as Void or Null, nextStop as Method() as Void) {
         BehaviorDelegate.initialize();
 
         self.displayBusesForCurrentStop = displayBusesForCurrentStop;
@@ -13,7 +13,9 @@ class ChristchurchBusBehaviorDelegate extends WatchUi.BehaviorDelegate {
 
     function onSelect() {
         nextStop.invoke();
-        displayBusesForCurrentStop.invoke();
+        if (displayBusesForCurrentStop != null) {
+            (displayBusesForCurrentStop as Method() as Void).invoke();
+        }
         // Select is handled here; do not pass it back to the widget stack.
         return true;
     }

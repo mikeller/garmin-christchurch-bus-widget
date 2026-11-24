@@ -50,9 +50,14 @@ function testPageIdentityTransitions(logger as Logger) as Boolean {
         Test.assertEqualMessage(nearIndex, NearbyPageOrder.preserve(
             {"stopId" => 201, "nearby" => true}, reordered, 0),
             "repeated updates do not move selected page");
-        Test.assertEqualMessage(-1, NearbyPageOrder.preserve(
-            {"stopId" => 201, "nearby" => true}, waiting, 0),
-            "missing nearby page must be retained until Select");
+        Test.assertEqualMessage(0, NearbyPageOrder.preserve(
+            {"stopId" => 201, "nearby" => true}, waiting, 1),
+            "missing nearby page restarts at first page");
+        var changed = NearbyPageOrderTestPages.fromOrder(NearbyPageOrder.build(
+            fav, [[203, "C", 20]] as Array, [] as Array, before, NearbyPageOrder.READY));
+        Test.assertEqualMessage(0, NearbyPageOrder.preserve(
+            {"stopId" => 201, "nearby" => true}, changed, 1),
+            "replaced nearby list restarts at first page, including before 16");
         var chosenAfterDrop = {"stopId" => fav[0]};
         Test.assertEqualMessage(1, NearbyPageOrder.preserve(chosenAfterDrop,
             NearbyPageOrderTestPages.fromOrder(NearbyPageOrder.build(fav,

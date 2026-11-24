@@ -19,7 +19,6 @@ class ChristchurchBusViewManager {
     private var currentStopIndex as Number = 0;
     private var savedStopId as Number?;
     private var initialPagesBuilt as Boolean = false;
-    private var retainedNearby as Number?;
     private var lastRequestAt as Dictionary<Number, Number> = {} as Dictionary<Number, Number>;
     private var updateFailed as Dictionary<Number, Boolean> = {} as Dictionary<Number, Boolean>;
     private var requestsThisCycle as Number = 0;
@@ -66,7 +65,6 @@ class ChristchurchBusViewManager {
     private var navigationPending as Boolean = false;
     (:nearby) private var titleStopId as Number?;
     (:nearby) private var titleRows as Array?;
-    (:debug, :nearby) private var benchRetain as Boolean = false;
 
     (:debug, :nearby)
     function benchSetup(favs as Array<Dictionary>, loc as NearbyLocation) as Void {
@@ -126,14 +124,6 @@ class ChristchurchBusViewManager {
         cycleStartedAt = Time.now().value();
     }
 
-    (:debug, :nearby)
-    function benchEnableRetention() as Void { benchRetain = true; }
-
-    (:debug, :nearby)
-    private function benchRetaining() as Boolean { return benchRetain; }
-    (:release, :nearby)
-    private function benchRetaining() as Boolean { return false; }
-
     function initialize(stops as Array<Dictionary>?) {
         if (stops != null) {
             favourites = stops;
@@ -143,7 +133,9 @@ class ChristchurchBusViewManager {
         }
         savedStopId = ChristchurchBusDataCache.getLastFavouriteForWidget(favourites);
         reader = new ChristchurchBusDataReader();
-        behaviourDelegate = new ChristchurchBusBehaviorDelegate(method(:navigationQueued), method(:nextStop));
+        // Nearby Select queues its own refresh; no second callback is needed.
+        // Avoid resolving an otherwise unused method symbol during startup.
+        behaviourDelegate = new ChristchurchBusBehaviorDelegate(null, method(:nextStop));
         currentView = new BaseChristchurchBusView(currentPageTitle, false, null, null);
         if (ChristchurchBusAppProperties.nearbyEnabled()) {
             setNearbyStatus(WatchUi.loadResource(Rez.Strings.Locating) as String);
@@ -255,12 +247,6 @@ class ChristchurchBusViewManager {
         }
         var oldIndex = currentStopIndex;
         currentStopIndex = nextPageIndex(currentStopIndex, pages.size());
-        if (retainedNearby != null && pages[oldIndex]["stopId"] == retainedNearby) {
-            var nextPage = pages[currentStopIndex];
-            pages.remove(pages[oldIndex]);
-            currentStopIndex = NearbyPageOrder.preserve(nextPage, pages, 0);
-            retainedNearby = null;
-        }
         logSelectDecision(oldIndex, currentStopIndex, pages.size());
         // Avoid Storage reads, network callbacks and view construction inside
         // the input callback. Coalesce rapid Select presses on the existing
@@ -374,12 +360,6 @@ class ChristchurchBusViewManager {
         }
         traceWorkEnd();
     }
-
-    // The Select delegate shares its interface with the noNearby manager,
-    // which still displays synchronously. Nearby navigation is timer-driven.
-    // This callback is passed by symbol to the BehaviourDelegate. It cannot
-    // be private because method(:navigationQueued) performs an indirect lookup.
-    function navigationQueued() as Void {}
 
     (:debug)
     private function traceLifecycle(event as String) as Void {
@@ -875,21 +855,6 @@ class ChristchurchBusViewManager {
             oldPage = {"stopId" => selected};
         }
         var chosenIndex = NearbyPageOrder.preserve(oldPage, newPages, fallback);
-        if ((started || benchRetaining()) && oldPage != null && oldPage["nearby"] == true) {
-            if (chosenIndex < 0) {
-                // Keep a dropped nearby page visible only until Select.
-                var insertAt = oldIndex < newPages.size() ? oldIndex : newPages.size();
-                newPages.add(oldPage as Dictionary);
-                for (var shift = newPages.size() - 1; shift > insertAt; shift--) { NearbyWorkCount.iteration();
-                    newPages[shift] = newPages[shift - 1];
-                }
-                newPages[insertAt] = oldPage as Dictionary;
-                retainedNearby = oldPage["stopId"] as Number;
-                chosenIndex = insertAt;
-            } else {
-                retainedNearby = null;
-            }
-        }
         pages = newPages;
         currentStopIndex = chosenIndex;
         initialPagesBuilt = true;
