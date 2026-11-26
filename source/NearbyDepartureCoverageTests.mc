@@ -5,7 +5,8 @@ import Toybox.Test;
 class NearbyDepartureCoverageTestData {
     static function data(line as String, destination as String) as Dictionary {
         return {"MonitoredStopVisit" => [
-            {"PublishedLineName" => line, "DestinationName" => destination}
+            {"PublishedLineName" => line, "DestinationName" => destination,
+             "ExpectedDepartureTime" => "2030-11-20T12:00:00Z"}
         ]} as Dictionary;
     }
 
@@ -77,14 +78,16 @@ function testNearbyDepartureCoverage(logger as Logger) as Boolean {
 function testNearbyBoundedKeysAndMonotonicCoverage(logger as Logger) as Boolean {
     var visits = [] as Array;
     for (var i = 0; i < NearbyDepartureCoverage.MAX_VISITS; i++) {
-        visits.add({"PublishedLineName" => "8", "DestinationName" => "Place " + i});
+        visits.add({"PublishedLineName" => "8", "DestinationName" => "Place " + i,
+            "ExpectedDepartureTime" => "2030-11-20T12:00:00Z"});
     }
     var data = {"MonitoredStopVisit" => visits} as Dictionary;
     NearbyWorkBudget.begin();
     var first = NearbyDepartureCoverage.keys(data);
     Test.assertEqualMessage(32, (first as Array).size(), "32 unique keys");
     Test.assertEqualMessage(32, NearbyWorkBudget.visits, "bounded first parse");
-    visits.add({"PublishedLineName" => "8", "DestinationName" => "Extra"});
+    visits.add({"PublishedLineName" => "8", "DestinationName" => "Extra",
+        "ExpectedDepartureTime" => "2030-11-20T12:00:00Z"});
     Test.assertMessage(NearbyDepartureCoverage.keys(data) == null, "33 visits unknown");
     Test.assertEqualMessage(32, NearbyWorkBudget.visits,
         "oversized response examined no visits");
@@ -92,8 +95,11 @@ function testNearbyBoundedKeysAndMonotonicCoverage(logger as Logger) as Boolean 
         {} as Dictionary<String, Boolean>, false] as Array;
     NearbyDepartureCoverage.mergeInto(provider,
         NearbyDepartureCoverage.keys(NearbyDepartureCoverageTestData.data("8", "City")));
-    Test.assertMessage(!NearbyDepartureCoverage.mergeInto(provider, null),
-        "unknown response never revokes history");
+    Test.assertMessage(NearbyDepartureCoverage.observe(provider, null),
+        "unknown response revokes unverified history");
+    Test.assertMessage(provider[2] == null, "unknown provider cannot hide another stop");
+    NearbyDepartureCoverage.observe(provider,
+        NearbyDepartureCoverageTestData.data("8", "City"));
     NearbyDepartureCoverage.mergeInto(provider,
         NearbyDepartureCoverage.keys(NearbyDepartureCoverageTestData.data("8", "Airport")));
     Test.assertEqualMessage(2, (provider[2] as Array).size(), "old and new keys accumulated");
@@ -115,7 +121,8 @@ function testNearbySyntheticSelectionWorkBudget(logger as Logger) as Boolean {
     var favourites = [] as Array<Number>;
     var visits = [] as Array;
     for (var i = 0; i < 32; i++) {
-        visits.add({"PublishedLineName" => "8", "DestinationName" => "Stop " + i});
+        visits.add({"PublishedLineName" => "8", "DestinationName" => "Stop " + i,
+            "ExpectedDepartureTime" => "2030-11-20T12:00:00Z"});
     }
     var data = {"MonitoredStopVisit" => visits} as Dictionary;
     for (var i = 0; i < 56; i++) {
@@ -200,7 +207,8 @@ function testNearbySessionKeyOverflowRestoresStops(logger as Logger) as Boolean 
         "new session may prove coverage again");
     var large = [] as Array;
     for (var i = 0; i <= NearbyDepartureCoverage.MAX_VISITS; i++) {
-        large.add({"PublishedLineName" => "8", "DestinationName" => "City"});
+        large.add({"PublishedLineName" => "8", "DestinationName" => "City",
+            "ExpectedDepartureTime" => "2030-11-20T12:00:00Z"});
     }
     Test.assertMessage(NearbyDepartureCoverage.observe(moved,
         {"MonitoredStopVisit" => large} as Dictionary), "oversized response overflows");
@@ -213,13 +221,33 @@ function testNearbySessionKeyOverflowRestoresStops(logger as Logger) as Boolean 
         {} as Dictionary<String, Boolean>, false] as Array;
     Test.assertMessage(!NearbyDepartureCoverage.observe(malformed,
         {"MonitoredStopVisit" => [
-            {"PublishedLineName" => "8", "DestinationName" => 12}
+            {"PublishedLineName" => "8", "DestinationName" => 12,
+             "ExpectedDepartureTime" => "2030-11-20T12:00:00Z"}
         ]} as Dictionary), "malformed visit cannot establish a key");
     Test.assertMessage(malformed[2] == null,
         "malformed response remains unknown, never an empty covering set");
     Test.assertEqualMessage(1,
         (NearbyDepartureCoverage.split(candidate, [malformed], 1)[0] as Array).size(),
         "malformed provider cannot suppress the matching stop");
+    NearbyDepartureCoverage.observe(malformed, initial);
+    Test.assertEqualMessage(0,
+        (NearbyDepartureCoverage.split(candidate, [malformed], 1)[0] as Array).size(),
+        "valid provider can establish coverage");
+    Test.assertMessage(NearbyDepartureCoverage.observe(malformed,
+        {"MonitoredStopVisit" => [
+            {"PublishedLineName" => "8", "DestinationName" => null,
+             "ExpectedDepartureTime" => "2030-11-20T12:00:00Z"}
+        ]} as Dictionary), "invalid new payload clears old provider keys");
+    Test.assertEqualMessage(1,
+        (NearbyDepartureCoverage.split(candidate, [malformed], 1)[0] as Array).size(),
+        "invalid replacement response restores hidden stop");
+    NearbyDepartureCoverage.observe(malformed, initial);
+    Test.assertMessage(NearbyDepartureCoverage.observe(malformed,
+        {"MonitoredStopVisit" => [] as Array} as Dictionary),
+        "empty successful response revokes older keys");
+    Test.assertEqualMessage(1,
+        (NearbyDepartureCoverage.split(candidate, [malformed], 1)[0] as Array).size(),
+        "no-departure provider cannot suppress a stop");
     var onlyOversized = [2003, 1l, null, true, null, null,
         {} as Dictionary<String, Boolean>, false] as Array;
     Test.assertMessage(NearbyDepartureCoverage.observe(onlyOversized,
@@ -305,6 +333,14 @@ function testTrimmedResponseKeysAndNavigationCoverage(logger as Logger) as Boole
     Test.assertMessage(NearbyDepartureCoverage.keys(
         NearbyDepartureCoverageTestData.data("8", "\t ")) == null,
         "whitespace-only destination is unknown");
+    Test.assertMessage(NearbyDepartureCoverage.keys(
+        {"MonitoredStopVisit" => [{"PublishedLineName" => "8",
+            "DestinationName" => "City"}]} as Dictionary) == null,
+        "missing departure time cannot establish coverage");
+    Test.assertMessage(NearbyDepartureCoverage.keys(
+        {"MonitoredStopVisit" => [{"PublishedLineName" => "8",
+            "DestinationName" => "City", "ExpectedDepartureTime" => "invalid"}]} as Dictionary) == null,
+        "invalid departure time cannot establish coverage");
     var caseSensitive = NearbyDepartureCoverageTestData.prepare(
         [[1003, 16l, NearbyDepartureCoverageTestData.data("8", "city"), false]] as Array);
     Test.assertEqualMessage(1, NearbyDepartureCoverage.select(caseSensitive,
@@ -351,7 +387,7 @@ function testNearbyResponseWiringDefersCachedKeys(logger as Logger) as Boolean {
     Test.assertMessage(candidate[8] == true, "live response supersedes pending seed");
     Test.assertMessage(!NearbyDepartureCoverage.observeResponse(candidates,
         favourites, 2001, data, true, true, true),
-        "stale response cannot establish favourite coverage");
+        "stale response with no previous keys cannot establish coverage");
     Test.assertMessage(NearbyDepartureCoverage.observeResponse(candidates,
         favourites, 2001, data, true, false, true),
         "favourite-only response is wired to its entry");
@@ -360,9 +396,18 @@ function testNearbyResponseWiringDefersCachedKeys(logger as Logger) as Boolean {
     Test.assertEqualMessage(0, (NearbyDepartureCoverage.split(candidates,
         favourites, 1)[0] as Array).size(),
         "closer favourite suppresses the trimmed candidate");
+    Test.assertMessage(NearbyDepartureCoverage.observeResponse(candidates,
+        favourites, 2001, data, true, true, true),
+        "stale update revokes previously observed favourite keys");
+    Test.assertEqualMessage(1, NearbyDepartureCoverage.select(candidates,
+        favourites, 1).size(), "stale provider cannot keep suppressing candidate");
+    Test.assertMessage(NearbyDepartureCoverage.observeResponse(candidates,
+        favourites, 2001, data, true, false, true),
+        "valid new provider response restores coverage");
     var oversized = [] as Array;
     for (var i = 0; i <= NearbyDepartureCoverage.MAX_VISITS; i++) {
-        oversized.add({"PublishedLineName" => "8", "DestinationName" => "City"});
+        oversized.add({"PublishedLineName" => "8", "DestinationName" => "City",
+            "ExpectedDepartureTime" => "2030-11-20T12:00:00Z"});
     }
     Test.assertMessage(NearbyDepartureCoverage.observeResponse(candidates,
         favourites, 2001, {"MonitoredStopVisit" => oversized} as Dictionary,

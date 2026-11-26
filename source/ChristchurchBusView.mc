@@ -88,7 +88,7 @@ class ChristchurchBusView extends BaseChristchurchBusView {
 
         var lineCount = 0;
         var visits = data["MonitoredStopVisit"] as Array<Dictionary>?;
-        if (visits != null) {
+        if (visits != null && visits.size() > 0 && fittedRows.size() > 0) {
             while (lineCount < fittedRows.size()) {
                 var row = fittedRows[lineCount] as Array;
                 if (row[1] as Boolean) {
@@ -129,7 +129,7 @@ class ChristchurchBusView extends BaseChristchurchBusView {
                     }
                 }
             } else {
-                errorMessage = Constants.NO_BUSES_STRING;
+                errorMessage = noDepartureMessage(visits);
             }
 
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
@@ -137,6 +137,13 @@ class ChristchurchBusView extends BaseChristchurchBusView {
                 rowHeight, screenWidth, screenHeight, false),
                 cursorY, Graphics.FONT_XTINY, errorMessage, Graphics.TEXT_JUSTIFY_LEFT);
         }
+    }
+
+    // An empty successful payload has no departures; an unrenderable
+    // non-empty payload is uncertain, not proof that buses have stopped.
+    static function noDepartureMessage(visits as Array?) as String {
+        return visits == null || visits.size() == 0 ?
+            Constants.NO_BUSES_STRING : Constants.NO_INFORMATION_STRING;
     }
 
    (:roundScreen)

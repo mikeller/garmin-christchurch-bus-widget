@@ -24,6 +24,7 @@ class ChristchurchBusViewManager {
     private var requestsThisCycle as Number = 0;
     private var cycleStartedAt as Number = -1;
     private var started as Boolean = false;
+    private var visible as Boolean = true;
     private var nearbyLocation as NearbyLocation?;
     (:nearby) private var tileReader as ChristchurchBusTileReader = new ChristchurchBusTileReader();
     (:nearby) private var nearbyEntries as Array = [] as Array;
@@ -124,6 +125,15 @@ class ChristchurchBusViewManager {
         cycleStartedAt = Time.now().value();
     }
 
+    (:debug, :nearby)
+    function benchHideCurrentView() as Void { viewHidden(currentView); }
+
+    (:debug, :nearby)
+    function benchIsVisible() as Boolean { return visible; }
+
+    (:debug, :nearby)
+    function benchSetStarted() as Void { started = true; }
+
     function initialize(stops as Array<Dictionary>?) {
         if (stops != null) {
             favourites = stops;
@@ -170,6 +180,7 @@ class ChristchurchBusViewManager {
     }
 
     function stop() as Void {
+        visible = false;
         retryTimer.stop();
         refreshTimer.stop();
         if (nearbyLocation != null) {
@@ -181,6 +192,13 @@ class ChristchurchBusViewManager {
     function viewHidden(view as WatchUi.View) as Void {
         // Page switches replace currentView before the previous page hides.
         // Only hiding the current page means that the widget left the screen.
+        if (view == currentView) {
+            visible = false;
+            refreshTimer.stop();
+            retryTimer.stop();
+            delayedRefreshRequested = false;
+            retryIndex = -1;
+        }
         if (view == currentView && nearbyLocation != null) {
             traceLifecycle("hide");
             (nearbyLocation as NearbyLocation).stop();
@@ -188,6 +206,10 @@ class ChristchurchBusViewManager {
     }
 
     function viewShown(view as WatchUi.View) as Void {
+        if (view == currentView && !visible) {
+            visible = true;
+            requestDelayedRefresh();
+        }
         if (view == currentView && nearbyLocation != null &&
             (nearbyLocation as NearbyLocation).getState() == NearbyLocation.IDLE) {
             traceLifecycle("show");
@@ -196,7 +218,7 @@ class ChristchurchBusViewManager {
     }
 
     private function switchView() as Void {
-        if (started) {
+        if (started && visible) {
             WatchUi.switchToView(currentView, behaviourDelegate, WatchUi.SLIDE_IMMEDIATE);
         }
     }
@@ -489,6 +511,9 @@ class ChristchurchBusViewManager {
 
     (:nearby)
     function onNearbyLocation() as Void {
+        if (started && !visible) {
+            return;
+        }
         if (nearbyLocation != null && (nearbyLocation as NearbyLocation).getState() == NearbyLocation.FIX) {
             if (slotState == NearbyPageOrder.LOCATING ||
                 slotState == NearbyPageOrder.UNAVAILABLE ||
@@ -541,6 +566,9 @@ class ChristchurchBusViewManager {
 
     (:nearby)
     function onTile(result as Number, context as Dictionary?, stale as Boolean) as Void {
+        if (started && !visible) {
+            return;
+        }
         NearbyWorkBudget.beginIfIdle();
         NearbyWorkCount.tile();
         var stops = context == null ? null : context["s"] as Array;
@@ -1159,6 +1187,11 @@ class ChristchurchBusViewManager {
 
     function onBusDataReady(data as Dictionary<String, String or Array>?, handle as Number,
                              requestIsCompleted as Boolean, dataIsStale as Boolean) as Void {
+        // A late HTTP callback must not replace a page after Back has hidden
+        // the widget. The platform owns dismissal of its base widget view.
+        if (started && !visible) {
+            return;
+        }
         updateDepartureSelection(data, handle, requestIsCompleted, dataIsStale);
         updateFailed[handle] = NearbyDepartureState.failed(updateFailed[handle] == true,
             requestIsCompleted, dataIsStale, false);
@@ -1216,6 +1249,9 @@ class ChristchurchBusViewManager {
     }
 
     function onDelayedRefresh() as Void {
+        if (started && !visible) {
+            return;
+        }
         delayedRefreshRequested = false;
         traceLifecycle("refresh");
         if (navigationPending) {

@@ -14,6 +14,57 @@ function testNearbySelectNeedsNoSecondCallback(logger as Logger) as Boolean {
     var delegate = new ChristchurchBusBehaviorDelegate(null, probe.method(:nextStop));
     Test.assertMessage(delegate.onSelect(), "Select is handled");
     Test.assertEqualMessage(1, probe.selected, "queued navigation needs no extra callback");
+    Test.assertMessage(!delegate.onBack(), "Back is left to the widget stack");
+    Test.assertMessage(!delegate.onNextPage(), "Down is left to the widget carousel");
+    Test.assertEqualMessage(1, probe.selected, "dismissal inputs never navigate pages");
+    return true;
+}
+
+(:test, :nearby)
+function testEmptyNearbyPayloadKeepsPageAndShowsStatus(logger as Logger) as Boolean {
+    var shared = NearbyDepartureCoverageTestData.data("8", "City");
+    var empty = {"MonitoredStopVisit" => [] as Array} as Dictionary;
+    var stops = NearbyDepartureCoverageTestData.prepare(
+        [[1001, 1l, shared, false], [1002, 4l, empty, false],
+         [1003, 9l, shared, false]] as Array);
+    Test.assertEqualMessage(2, NearbyDepartureCoverage.select(stops, [] as Array, 3).size(),
+        "empty nearby stop retained while shared later stop is suppressed");
+    Test.assertEqualMessage(1002,
+        (NearbyDepartureCoverage.select(stops, [] as Array, 3)[1] as Array)[0],
+        "empty stop remains visible");
+    Test.assertEqualMessage(Constants.NO_BUSES_STRING,
+        ChristchurchBusView.noDepartureMessage(empty["MonitoredStopVisit"] as Array),
+        "successful empty payload shows no more buses");
+    Test.assertEqualMessage(Constants.NO_INFORMATION_STRING,
+        ChristchurchBusView.noDepartureMessage([shared] as Array),
+        "unrenderable non-empty payload is not called empty");
+    Test.assertMessage(!ChristchurchBusDataReader.hasVisits(empty["MonitoredStopVisit"] as Array),
+        "empty response has no visit from which to persist a stop name");
+    Test.assertMessage(ChristchurchBusDataReader.hasVisits([shared] as Array),
+        "normal response retains stop-name persistence");
+    Test.assertEqualMessage(0,
+        ((new ChristchurchBusDataReader()).compressData(empty
+            as Dictionary<String, String or Array>)["MonitoredStopVisit"] as Array).size(),
+        "reader keeps successful zero-visit payload for explicit empty state");
+    return true;
+}
+
+(:test, :nearby)
+function testHiddenFavouriteIgnoresLateCallbacks(logger as Logger) as Boolean {
+    Properties.setValue("nearbyEnabled", false);
+    var manager = new ChristchurchBusViewManager([] as Array<Dictionary>);
+    manager.benchSetup(
+        [{"stopId" => 1000, "displayName" => "Favourite"}] as Array<Dictionary>,
+        new NearbyBudgetLocation());
+    manager.benchSetStarted();
+    manager.benchHideCurrentView();
+    Test.assertMessage(!manager.benchIsVisible(), "Back hides current favourite");
+    manager.onDelayedRefresh();
+    manager.onBusDataReady(NearbyDepartureCoverageTestData.data("8", "City"),
+        1000, true, false);
+    Test.assertMessage(!manager.benchIsVisible(),
+        "late refresh and HTTP callback cannot bring the widget back");
+    manager.stop();
     return true;
 }
 
@@ -40,7 +91,8 @@ function testNearbyManagerResponseAndRecheckWiring(logger as Logger) as Boolean 
     Test.assertEqualMessage(2, manager.benchNearbyCount(), "two nearby pages");
     var reader = manager.benchReader();
     var shared = {"MonitoredStopVisit" => [
-        {"PublishedLineName" => " 8 ", "DestinationName" => " City "}]}
+        {"PublishedLineName" => " 8 ", "DestinationName" => " City ",
+         "ExpectedDepartureTime" => "2030-11-20T12:00:00Z"}]}
         as Dictionary<String, String or Array>;
     reader.markRunning(1000);
     manager.onBusDataReady(shared, 1000, true, false);
@@ -69,14 +121,15 @@ function testNearbyManagerResponseAndRecheckWiring(logger as Logger) as Boolean 
     Test.assertEqualMessage(1, reader.recheckCount,
         "navigation cannot start a second recheck while one is in flight");
     var distinct = {"MonitoredStopVisit" => [
-        {"PublishedLineName" => "9", "DestinationName" => "Airport"}]}
+        {"PublishedLineName" => "9", "DestinationName" => "Airport",
+         "ExpectedDepartureTime" => "2030-11-20T12:00:00Z"}]}
         as Dictionary<String, String or Array>;
     manager.onBusDataReady(distinct, 1001, true, false);
     reader.finish(1001);
     Test.assertMessage(!manager.benchIsDropped(1001),
         "new response restores previously covered candidate");
-    Test.assertEqualMessage(1003, manager.benchSelectedStop(),
-        "restoration keeps the viewed nearby page");
+    Test.assertEqualMessage(1000, manager.benchSelectedStop(),
+        "restoring ahead of a full page limit falls back to first favourite");
     Test.assertEqualMessage(2,
         ((manager.benchCandidateState(1001) as Array)[2] as Array).size(),
         "responses accumulate keys once, rather than replaying cache visits");
@@ -88,7 +141,8 @@ function testNearbyManagerResponseAndRecheckWiring(logger as Logger) as Boolean 
         "no old key can suppress a stop after movement");
     var oversized = [] as Array;
     for (var i = 0; i <= NearbyDepartureCoverage.MAX_VISITS; i++) {
-        oversized.add({"PublishedLineName" => "8", "DestinationName" => "City"});
+        oversized.add({"PublishedLineName" => "8", "DestinationName" => "City",
+            "ExpectedDepartureTime" => "2030-11-20T12:00:00Z"});
     }
     reader.markRunning(1001);
     manager.onBusDataReady({"MonitoredStopVisit" => oversized}

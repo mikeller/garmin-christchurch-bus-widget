@@ -113,13 +113,17 @@ class ChristchurchBusDataReader {
 
     private function persistStopName(stopId as Number, data as Dictionary<String, String or Array>) as Void {
         var visits = data["MonitoredStopVisit"] as Array<Dictionary>?;
-        if (visits != null) {
+        if (hasVisits(visits)) {
             var visit = visits[0];
             var journey = visit["MonitoredVehicleJourney"] as Dictionary<String, String or Number or Boolean or Dictionary>;
             var stopName = (journey["MonitoredCall"] as Dictionary<String, String or Boolean or Dictionary>)["StopPointName"] as String;
             
             ChristchurchBusAppProperties.setStopNameIfEmpty(stopId, SharedStopName.clean(stopName));
         }
+    }
+
+    static function hasVisits(visits as Array?) as Boolean {
+        return visits != null && (visits as Array).size() > 0;
     }
 
     function compressData(data as Dictionary<String, String or Array>) as Dictionary<String, String or Array> {

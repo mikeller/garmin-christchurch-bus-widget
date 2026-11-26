@@ -27,7 +27,16 @@ class NearbyDepartureCoverage {
             }
             var rawLine = (visit as Dictionary)["PublishedLineName"];
             var rawDestination = (visit as Dictionary)["DestinationName"];
-            if (!(rawLine instanceof String) || !(rawDestination instanceof String)) {
+            var departure = (visit as Dictionary)["ExpectedDepartureTime"];
+            if (!(rawLine instanceof String) || !(rawDestination instanceof String) ||
+                !(departure instanceof String)) {
+                return null;
+            }
+            try {
+                if (Utils.parseIsoDate(departure as String) == null) {
+                    return null;
+                }
+            } catch (e) {
                 return null;
             }
             var line = trimField(rawLine as String);
@@ -73,7 +82,17 @@ class NearbyDepartureCoverage {
                 return overflow(entry);
             }
         }
-        return mergeInto(entry, keys(data));
+        var fresh = keys(data);
+        if (fresh == null) {
+            // An invalid, empty or error response cannot substantiate even
+            // previously observed coverage for this stop. Retain it until
+            // a valid response supplies keys again.
+            var hadKeys = entry[2] != null;
+            entry[2] = null;
+            entry[6] = {} as Dictionary<String, Boolean>;
+            return hadKeys;
+        }
+        return mergeInto(entry, fresh);
     }
 
     // A cache-hit callback may fire synchronously during page construction.
@@ -83,7 +102,7 @@ class NearbyDepartureCoverage {
                                     id as Number, data as Dictionary?,
                                     completed as Boolean, stale as Boolean,
                                     live as Boolean) as Boolean {
-        if (!completed || stale || !live) {
+        if (!completed || !live) {
             return false;
         }
         for (var group = 0; group < 2; group++) {
@@ -92,7 +111,7 @@ class NearbyDepartureCoverage {
                 var entry = entries[i] as Array;
                 if (entry[0] == id) {
                     entry[8] = true;
-                    return observe(entry, data);
+                    return observe(entry, stale ? null : data);
                 }
             }
         }
@@ -166,7 +185,8 @@ class NearbyDepartureCoverage {
             }
             considered++;
             var candidateKeys = entry[2] as Array?;
-            var allCovered = candidateKeys != null;
+            var allCovered = candidateKeys != null && (candidateKeys as Array).size() > 0 &&
+                entry[7] != true;
             if (candidateKeys != null) {
                 for (var f = 0; f < favourites.size(); f++) {
                     NearbyWorkCount.iteration();
@@ -174,7 +194,7 @@ class NearbyDepartureCoverage {
                     if ((favourite[1] as Long) < (entry[1] as Long) &&
                         folded[f] != true) {
                         var provider = favourite[2] as Array?;
-                        if (provider != null) {
+                        if (provider != null && favourite[7] != true) {
                             add(covered, provider as Array);
                         }
                         folded[f] = true;
@@ -190,7 +210,7 @@ class NearbyDepartureCoverage {
             }
             if (!allCovered) {
                 selected.add(entry);
-                if (candidateKeys != null) {
+                if (candidateKeys != null && entry[7] != true) {
                     add(covered, candidateKeys as Array);
                 }
             } else {
