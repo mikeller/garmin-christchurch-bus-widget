@@ -33,7 +33,7 @@
     <string id="NoStops" scope="glance">No stops!</string>
     <string id="NoBuses" scope="glance">No more buses!</string>
 
-    <string id="NoInformation" scope="glance">--------------</string>
+    <string id="NoInformation" scope="glance">Loading departures...</string>
 
     <string id="UnknownError" scope="glance">Unknown error!</string>
 </strings>

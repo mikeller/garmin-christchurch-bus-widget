@@ -1,4 +1,5 @@
 import Toybox.Lang;
+import Toybox.Time;
 
 // A departure is shared only when both the published line and destination
 // match exactly. Unknown, empty and error responses do not establish coverage.
@@ -33,8 +34,15 @@ class NearbyDepartureCoverage {
                 return null;
             }
             try {
-                if (Utils.parseIsoDate(departure as String) == null) {
+                var departureTime = Utils.parseIsoDate(departure as String);
+                if (departureTime == null) {
                     return null;
+                }
+                // The display omits departed visits. They must not supply a
+                // unique key that keeps an otherwise redundant stop visible,
+                // nor cover another stop that still has live departures.
+                if ((departureTime as Time.Moment).compare(Time.now()) < 0) {
+                    continue;
                 }
             } catch (e) {
                 return null;
@@ -52,7 +60,10 @@ class NearbyDepartureCoverage {
                 result.add(key);
             }
         }
-        return result;
+        // A valid response containing only departed visits is equivalent to
+        // no live coverage. Keep the stop rather than treating an empty key
+        // set as proof that another stop covers it.
+        return result.size() == 0 ? null : result;
     }
 
     // Monkey C String has no trim(). Keep the source fields unchanged, and

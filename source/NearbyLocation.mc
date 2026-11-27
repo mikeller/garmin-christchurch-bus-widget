@@ -140,19 +140,11 @@ class NearbyLocation {
     }
 
     function stop() as Void {
-        if (callback != null) {
-            // A new last-known position may be available just before exit,
-            // even if no callback was delivered in this short session.
-            try {
-                var now = Time.now().value();
-                var finalFix = fromInfo(Position.getInfo(), now);
-                if (finalFix != null) {
-                    NearbyStoredFix.saveNewer(finalFix as Dictionary, now);
-                }
-            } catch (e) {
-                // A denied or unavailable fix must not delay widget exit.
-            }
-        }
+        // stop() is called from View.onHide while the widget stack is being
+        // dismissed. Do not synchronously query Position or Storage here:
+        // either may wait for the platform service and prevent Back/Up/Down
+        // from leaving promptly. Accepted fixes are already persisted by
+        // start()/onLocation(); this only tears down the active listener.
         timeout.stop();
         if (acquiring) {
             disableEvents();

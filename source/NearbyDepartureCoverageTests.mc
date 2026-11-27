@@ -1,5 +1,6 @@
 import Toybox.Lang;
 import Toybox.Test;
+import Toybox.Time;
 
 (:debug, :nearby)
 class NearbyDepartureCoverageTestData {
@@ -112,6 +113,33 @@ function testNearbyBoundedKeysAndMonotonicCoverage(logger as Logger) as Boolean 
         [[1003, 16l, NearbyDepartureCoverageTestData.data("8C", "ity"), false]] as Array);
     Test.assertEqualMessage(1, NearbyDepartureCoverage.select(colliding, [provider], 2).size(),
         "length prefix distinguishes joined fields");
+    return true;
+}
+
+(:test, :nearby)
+function testNearbyCoverageIgnoresDepartedVisits(logger as Logger) as Boolean {
+    var future = Utils.dateToIsoString(Time.now().add(new Time.Duration(120)))
+        .substring(0, 19) + "Z";
+    var past = Utils.dateToIsoString(Time.now().subtract(new Time.Duration(120)))
+        .substring(0, 19) + "Z";
+    var closer = {"MonitoredStopVisit" => [
+        {"PublishedLineName" => "8", "DestinationName" => "City",
+         "ExpectedDepartureTime" => future}
+    ]} as Dictionary;
+    var redundant = {"MonitoredStopVisit" => [
+        {"PublishedLineName" => "8", "DestinationName" => "City",
+         "ExpectedDepartureTime" => future},
+        {"PublishedLineName" => "9", "DestinationName" => "Past only",
+         "ExpectedDepartureTime" => past}
+    ]} as Dictionary;
+    var entries = NearbyDepartureCoverageTestData.prepare(
+        [[1001, 1l, closer, false], [1002, 4l, redundant, false]] as Array);
+    Test.assertEqualMessage(1, NearbyDepartureCoverage.select(entries, [] as Array, 2).size(),
+        "departed unique visit cannot retain an otherwise redundant stop");
+    var redundantVisits = redundant["MonitoredStopVisit"] as Array;
+    Test.assertMessage(NearbyDepartureCoverage.keys(
+        {"MonitoredStopVisit" => [redundantVisits[1]]} as Dictionary) == null,
+        "past-only response provides no coverage");
     return true;
 }
 
